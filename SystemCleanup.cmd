@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-:: 🔸 Resolve PowerShell host (pwsh preferred, fallback to Windows PowerShell)
+REM Resolve PowerShell host (pwsh preferred, fallback to Windows PowerShell)
 where pwsh.exe >nul 2>&1
 if "%errorlevel%"=="0" (
     set "PS_EXE=pwsh"
@@ -9,7 +9,7 @@ if "%errorlevel%"=="0" (
     set "PS_EXE=powershell"
 )
 
-:: 🔸 Define ANSI Colors
+REM Define ANSI Colors
 for /F %%a in ('echo prompt $E^| cmd') do set "ESC=%%a"
 set "cReset=%ESC%[0m"
 set "cCyan=%ESC%[36m"
@@ -20,24 +20,18 @@ set "cGray=%ESC%[90m"
 set "cWhite=%ESC%[37m"
 set "cBold=%ESC%[1m"
 
-:: 🔸 Force UTF-8 Encoding for Icons
+REM Force UTF-8 Encoding for Icons
 chcp 65001 >nul
 
-:: 🔸 Check Admin Privileges (Safe Mode Compatible)
+REM Check Admin Privileges (Safe Mode Compatible)
 net session >nul 2>&1
 if "%errorLevel%" == "0" goto :IsAdmin
 
 fsutil dirty query %systemdrive% >nul 2>&1
 if "!errorLevel!" == "0" goto :IsAdmin
 
-if "%__ELEVATED%"=="1" (
-    echo %cRed%ERROR: Could not elevate to Admin.%cReset%
-    pause
-    exit /b 1
-)
 echo %cYellow%Requesting Administrative Privileges...%cReset%
-set "__ELEVATED=1"
-"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "Start-Process cmd.exe -ArgumentList '/c set __ELEVATED=1 ^& \"%~f0\"' -Verb RunAs"
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
 if not "%errorlevel%"=="0" (
     echo %cRed%Elevation failed or was canceled.%cReset%
     pause
@@ -49,14 +43,14 @@ exit /b
 set "LogDir=D:\Temp\SystemCleanup"
 if not exist "%LogDir%" mkdir "%LogDir%"
 
-:: 🔸 Generate Log Filename
+REM Generate Log Filename
 for /f "tokens=2-4 delims=/ " %%a in ('date /t') do (set mydate=%%c%%a%%b)
 for /f "tokens=1-2 delims=/:" %%a in ('time /t') do (set mytime=%%a%%b)
 set "LogFile=%LogDir%\SystemCleanup_%mydate%_%mytime%.log"
 
-:: ---------------------------------------------------------
-:: 🛑 MENU SCREEN
-:: ---------------------------------------------------------
+REM ---------------------------------------------------------
+REM MENU SCREEN
+REM ---------------------------------------------------------
 cls
 echo.
 echo %cCyan%==========================================%cReset%
@@ -83,9 +77,9 @@ if "%CHOICE%" NEQ "1" (
     exit /b
 )
 
-:: ---------------------------------------------------------
-:: 🚀 MAIN EXECUTION (OPTION 1)
-:: ---------------------------------------------------------
+REM ---------------------------------------------------------
+REM MAIN EXECUTION (OPTION 1)
+REM ---------------------------------------------------------
 cls
 echo.
 echo %cCyan%==========================================%cReset%
@@ -95,22 +89,22 @@ echo.
 echo %cGray%Logs saved to: %LogFile%%cReset%
 echo.
 
-:: Phase 1: SFC
+REM Phase 1: SFC
 call :ResetService
 call :RunStep " SFC (Initial Scan)" "sfc /scannow"
 set "SFC_EXIT=%EXITCODE%"
 
-:: Phase 2: DISM Core Maintenance
+REM Phase 2: DISM Core Maintenance
 call :RunStep " DISM AnalyzeComponentStore" "dism.exe /Online /Cleanup-Image /AnalyzeComponentStore"
 call :RunStep " DISM RestoreHealth" "dism.exe /Online /Cleanup-Image /RestoreHealth"
 call :RunStep " DISM StartComponentCleanup" "dism.exe /Online /Cleanup-Image /StartComponentCleanup"
 
-:: Phase 3: InFlight Call
+REM Phase 3: InFlight Call
 echo.
 echo %cCyan%=== Cleaning WinSxS Temp ===%cReset%
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0CleanInFlight.ps1" -SilentCaller
 
-:: Phase 4: Final Verification
+REM Phase 4: Final Verification
 call :ResetService
 call :RunStep " SFC (Final Verification)" "sfc /scannow"
 
@@ -127,9 +121,9 @@ echo.
 pause
 exit /b
 
-:: ---------------------------------------------------------
-:: 🔸 OPTION 2: InFlight Cleanup Only (MoveFileEx)
-:: ---------------------------------------------------------
+REM ---------------------------------------------------------
+REM OPTION 2: InFlight Cleanup Only (MoveFileEx)
+REM ---------------------------------------------------------
 :InFlightOnly
 cls
 echo.
@@ -142,9 +136,9 @@ echo.
 pause
 exit /b
 
-:: ---------------------------------------------------------
-:: 💡 HELPER FUNCTIONS
-:: ---------------------------------------------------------
+REM ---------------------------------------------------------
+REM HELPER FUNCTIONS
+REM ---------------------------------------------------------
 
 :ResetService
 echo.
@@ -162,30 +156,30 @@ echo %cCyan%=== !StepTitle! ===%cReset%
 echo.
 echo [%date% %time%] STARTING: !StepTitle! >> "%LogFile%"
 
-:: 🔸 Run Command DIRECTLY (no pipe to powershell, this was causing crashes!)
+REM Run command directly (no pipe to powershell, this was causing crashes)
 %StepCmd%
 set "EXITCODE=!errorlevel!"
 
-:: 🔸 Result Detection (Robust EXITCODE Evaluation)
+REM Result detection (robust EXITCODE evaluation)
 set "RESULT_STATUS=UNKNOWN"
 
-:: Check if command contains SFC
+REM Check if command contains SFC
 echo !StepCmd! | find /i "sfc" >nul 2>&1
 if "!errorlevel!"=="0" goto :EvaluateCode
 goto :EvaluateCode
 
 :EvaluateCode
-:: Evaluate native exit code cleanly
+REM Evaluate native exit code cleanly
 if "%EXITCODE%"=="0" set "RESULT_STATUS=CLEAN"
 if "%EXITCODE%" NEQ "0" set "RESULT_STATUS=FAILED"
 
 :ShowResult
-:: Print outcome
+REM Print outcome
 if "%RESULT_STATUS%"=="CLEAN" goto :ResClean
 if "%RESULT_STATUS%"=="REPAIRED" goto :ResRepaired
 if "%RESULT_STATUS%"=="FAILED" goto :ResFailed
 
-:: Default
+REM Default
 echo.
 echo    %cGreen%+++   OK: Step completed.%cReset%
 echo [%date% %time%] SUCCESS: !StepTitle! >> "%LogFile%"
