@@ -1,6 +1,14 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+:: 🔸 Resolve PowerShell host (pwsh preferred, fallback to Windows PowerShell)
+where pwsh.exe >nul 2>&1
+if "%errorlevel%"=="0" (
+    set "PS_EXE=pwsh"
+) else (
+    set "PS_EXE=powershell"
+)
+
 :: 🔸 Define ANSI Colors
 for /F %%a in ('echo prompt $E^| cmd') do set "ESC=%%a"
 set "cReset=%ESC%[0m"
@@ -29,7 +37,11 @@ if "%__ELEVATED%"=="1" (
 )
 echo %cYellow%Requesting Administrative Privileges...%cReset%
 set "__ELEVATED=1"
-pwsh -Command "Start-Process cmd -ArgumentList '/c set __ELEVATED=1 & \"%~f0\"' -Verb RunAs"
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "Start-Process cmd.exe -ArgumentList '/c set __ELEVATED=1 ^& \"%~f0\"' -Verb RunAs"
+if not "%errorlevel%"=="0" (
+    echo %cRed%Elevation failed or was canceled.%cReset%
+    pause
+)
 exit /b
 
 :IsAdmin
@@ -96,7 +108,7 @@ call :RunStep " DISM StartComponentCleanup" "dism.exe /Online /Cleanup-Image /St
 :: Phase 3: InFlight Call
 echo.
 echo %cCyan%=== Cleaning WinSxS Temp ===%cReset%
-pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0CleanInFlight.ps1" -SilentCaller
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0CleanInFlight.ps1" -SilentCaller
 
 :: Phase 4: Final Verification
 call :ResetService
@@ -125,7 +137,7 @@ echo %cCyan%==========================================%cReset%
 echo    %cBold%  INFLIGHT CLEANUP (MoveFileEx/Registry)%cReset%
 echo %cCyan%==========================================%cReset%
 echo.
-pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0CleanInFlight.ps1"
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0CleanInFlight.ps1"
 echo.
 pause
 exit /b
