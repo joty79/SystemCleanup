@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CLASSES_ROOT\DesktopBackground\Shell\SystemCleanup]
+@="Windows Update CleanUp"
+"Icon"="imageres.dll,-5323"
+
+[HKEY_CLASSES_ROOT\DesktopBackground\Shell\SystemCleanup\Command]
+@="cmd.exe /c \"D:\\Users\\joty79\\scripts\\dism\\SystemCleanup.cmd\""

@@ -1,0 +1,8 @@
+# Legacy/test artifacts not part of the tracked project baseline
+New folder/
+suggestions/
+SystemCleanup.lnk
+SystemCleanup.rar
+SystemCleanup.ps1
+dism_Cleanup.ps1
+temp_test.cmd
