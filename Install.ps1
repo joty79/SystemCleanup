@@ -314,6 +314,17 @@ function ResolveSourceRoot {
 
 function Deploy([string]$SourceRoot, [string]$InstallRoot) {
     $keep = @{}; foreach ($e in (Arr 'preserve_existing_entries')) { $keep[$e.ToLowerInvariant()] = $true }
+    $winTextExt = @('.cmd', '.bat', '.reg', '.vbs')
+    function NormalizeWindowsTextFile([string]$Path) {
+        if (-not (Test-Path -LiteralPath $Path)) { return }
+        $ext = [System.IO.Path]::GetExtension($Path).ToLowerInvariant()
+        if ($winTextExt -notcontains $ext) { return }
+        $raw = Get-Content -LiteralPath $Path -Raw
+        $normalized = $raw -replace "`r?`n", "`r`n"
+        if ($normalized -ne $raw) {
+            Set-Content -LiteralPath $Path -Value $normalized -Encoding UTF8
+        }
+    }
     foreach ($rel in (DeployEntries)) {
         $src = Join-Path $SourceRoot $rel
         $dst = Join-Path $InstallRoot $rel
@@ -330,6 +341,7 @@ function Deploy([string]$SourceRoot, [string]$InstallRoot) {
         if ($preserve -and (Test-Path -LiteralPath $dst)) { continue }
         if ((Norm $src) -ieq (Norm $dst)) { continue }
         Copy-Item -LiteralPath $src -Destination $dst -Force
+        NormalizeWindowsTextFile -Path $dst
     }
 }
 
