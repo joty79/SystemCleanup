@@ -1,7 +1,7 @@
 # PROJECT_RULES - SystemCleanup
 
 ## Scope
-- Repo: `D:\Users\joty79\scripts\dism`
+- Repo: `D:\Users\joty79\scripts\SystemCleanup`
 - Purpose: desktop context-menu tool for Windows component cleanup (`SFC`, `DISM`, `InFlight` cleanup).
 
 ## Guardrails
