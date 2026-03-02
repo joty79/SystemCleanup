@@ -1,8 +1,13 @@
 Windows Registry Editor Version 5.00
 
-[HKEY_CLASSES_ROOT\DesktopBackground\Shell\SystemCleanup]
-@="Windows Update CleanUp"
+[-HKEY_CURRENT_USER\Software\Classes\DesktopBackground\Shell\SystemCleanup]
+[-HKEY_CURRENT_USER\Software\Classes\DesktopBackground\Shell\SystemTools\shell\SystemCleanup]
+[-HKEY_CLASSES_ROOT\DesktopBackground\Shell\SystemCleanup]
+[-HKEY_CLASSES_ROOT\DesktopBackground\Shell\SystemTools\shell\SystemCleanup]
+
+[HKEY_CURRENT_USER\Software\Classes\DesktopBackground\Shell\SystemTools\shell\SystemCleanup]
+"MUIVerb"="Windows Update CleanUp"
 "Icon"="imageres.dll,-5323"
 
-[HKEY_CLASSES_ROOT\DesktopBackground\Shell\SystemCleanup\Command]
-@="cmd.exe /c \"D:\\Users\\joty79\\scripts\\dism\\SystemCleanup.cmd\""
+[HKEY_CURRENT_USER\Software\Classes\DesktopBackground\Shell\SystemTools\shell\SystemCleanup\Command]
+@="cmd.exe /c \"D:\\Users\\joty79\\scripts\\SystemCleanup\\SystemCleanup.cmd\""

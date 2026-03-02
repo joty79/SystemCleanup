@@ -23,7 +23,7 @@ $script:ProfileJson = @'
   "installer_title": "SystemCleanup Installer",
   "install_folder_name": "SystemCleanupContext",
   "github_repo": "joty79/SystemCleanup",
-  "github_ref": "master",
+  "github_ref": "",
   "legacy_root": "D:\\Users\\joty79\\scripts\\dism",
   "publisher": "joty79",
   "uninstall_key_name": "SystemCleanupContext",
@@ -65,23 +65,25 @@ $script:ProfileJson = @'
   ],
   "registry_cleanup_keys": [
     "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemCleanup",
-    "HKCR\\DesktopBackground\\Shell\\SystemCleanup"
+    "HKCR\\DesktopBackground\\Shell\\SystemCleanup",
+    "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
+    "HKCR\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup"
   ],
   "registry_values": [
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemCleanup",
-      "name": "(default)",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
+      "name": "MUIVerb",
       "type": "REG_SZ",
       "value": "Windows Update CleanUp"
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
       "name": "Icon",
       "type": "REG_SZ",
       "value": "imageres.dll,-5323"
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemCleanup\\Command",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "type": "REG_SZ",
       "value": "cmd.exe /c \"{InstallRoot}\\SystemCleanup.cmd\""
@@ -89,12 +91,12 @@ $script:ProfileJson = @'
   ],
   "registry_verify": [
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemCleanup",
-      "name": "(default)",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
+      "name": "MUIVerb",
       "expected": "Windows Update CleanUp"
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemCleanup\\Command",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "expected": "cmd.exe /c \"{InstallRoot}\\SystemCleanup.cmd\""
     }
@@ -103,6 +105,7 @@ $script:ProfileJson = @'
 }
 '@
 $script:Profile = $script:ProfileJson | ConvertFrom-Json -Depth 50
+$script:GitHubRefSpecified = $PSBoundParameters.ContainsKey('GitHubRef')
 
 function Get-P([string]$Name, [object]$Default = $null) {
     $prop = $script:Profile.PSObject.Properties[$Name]
@@ -116,6 +119,14 @@ function X([string]$Value, [string]$InstallRoot) {
     return $Value.Replace('{InstallRoot}', $InstallRoot).Replace('{InstallPath}', $InstallPath).Replace('{SourcePath}', $SourcePath)
 }
 function EnsureDir([string]$Path) { if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -ItemType Directory -Force | Out-Null } }
+function NormalizeGitHubRef([string]$Ref) {
+    if ($null -eq $Ref) { return '' }
+    $candidate = $Ref.Trim()
+    if ($candidate.StartsWith('refs/heads/', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $candidate = $candidate.Substring('refs/heads/'.Length)
+    }
+    return $candidate
+}
 
 $script:ToolName = [string](Get-P 'tool_name' 'Tool')
 $script:InstallerVersion = '1.0.0'
@@ -132,8 +143,8 @@ $script:HasCliArgs = $MyInvocation.BoundParameters.Count -gt 0
 
 if ([string]::IsNullOrWhiteSpace($InstallPath)) { $InstallPath = Join-Path $env:LOCALAPPDATA ([string](Get-P 'install_folder_name' "$($script:ToolName)Context")) }
 if ([string]::IsNullOrWhiteSpace($GitHubRepo)) { $GitHubRepo = [string](Get-P 'github_repo' '') }
-if ([string]::IsNullOrWhiteSpace($GitHubRef)) { $GitHubRef = [string](Get-P 'github_ref' 'master') }
-if ([string]::IsNullOrWhiteSpace($GitHubRef)) { $GitHubRef = 'master' }
+$GitHubRef = NormalizeGitHubRef $GitHubRef
+if (-not $script:GitHubRefSpecified) { $GitHubRef = NormalizeGitHubRef ([string](Get-P 'github_ref' '')) }
 $InstallPath = Norm $InstallPath
 $SourcePath = Norm $SourcePath
 $script:InstallerLogPath = Join-Path $InstallPath 'logs\installer.log'
@@ -171,11 +182,17 @@ function RegCmd([AllowEmptyString()][string[]]$RegArgs, [switch]$IgnoreNotFound)
 }
 function RegDel([string]$Key) { RegCmd -RegArgs @('delete', $Key, '/f') -IgnoreNotFound | Out-Null }
 function RegAdd([string]$Key, [string]$Name, [string]$Type, [AllowEmptyString()][string]$Value) {
-    $safe = if ($Type -eq 'REG_DWORD') { if ([string]::IsNullOrWhiteSpace($Value)) { '0' } else { $Value } } else { if ($Value -eq '') { '""' } else { $Value } }
+    $safe = if ($Type -eq 'REG_DWORD') { if ([string]::IsNullOrWhiteSpace($Value)) { '0' } else { $Value } } else { $Value }
     $regArgs = @('add', $Key)
     if ($Name -eq '(default)') { $regArgs += '/ve' } else { $regArgs += @('/v', $Name) }
     $regArgs += @('/t', $Type, '/d', $safe, '/f')
     RegCmd -RegArgs $regArgs | Out-Null
+    if ($Type -in @('REG_SZ', 'REG_EXPAND_SZ') -and $Value -eq '') {
+        $actual = RegGet -Key $Key -Name $Name
+        if ($null -eq $actual -or $actual -ne '') {
+            throw "Empty-string registry write verification failed for $Key [$Name]"
+        }
+    }
 }
 function RegGet([string]$Key, [string]$Name) {
     $q = if ($Name -eq '(default)') { RegCmd -RegArgs @('query', $Key, '/ve') -IgnoreNotFound } else { RegCmd -RegArgs @('query', $Key, '/v', $Name) -IgnoreNotFound }
@@ -238,10 +255,110 @@ function RemoveUninstall {
 }
 
 function TestPkgRoot([string]$Root) { foreach ($e in (RequiredEntries)) { if (-not (Test-Path -LiteralPath (Join-Path $Root $e))) { return $false } }; return $true }
+function Get-GitHubApiHeaders {
+    $headers = @{ 'User-Agent' = "$($script:ToolName)Installer/$($script:InstallerVersion)" }
+    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
+        $headers['Authorization'] = "Bearer $($env:GITHUB_TOKEN)"
+    }
+    return $headers
+}
+function Get-GitHubRemoteInfo([string]$Repo) {
+    $result = [ordered]@{
+        DefaultBranch = ''
+        Branches = [System.Collections.Generic.List[string]]::new()
+    }
+    if ([string]::IsNullOrWhiteSpace($Repo)) { return [pscustomobject]$result }
+
+    if (Get-Command gh.exe -ErrorAction SilentlyContinue) {
+        try {
+            $repoJson = (& gh.exe api "repos/$Repo" 2>$null | Out-String).Trim()
+            if (-not [string]::IsNullOrWhiteSpace($repoJson)) {
+                $repoInfo = $repoJson | ConvertFrom-Json
+                $result.DefaultBranch = [string]$repoInfo.default_branch
+            }
+            $branchesJson = (& gh.exe api --paginate "repos/$Repo/branches?per_page=100" 2>$null | Out-String).Trim()
+            if (-not [string]::IsNullOrWhiteSpace($branchesJson)) {
+                foreach ($row in @($branchesJson | ConvertFrom-Json)) {
+                    $name = NormalizeGitHubRef ([string]$row.name)
+                    if (-not [string]::IsNullOrWhiteSpace($name) -and -not $result.Branches.Contains($name)) {
+                        $result.Branches.Add($name)
+                    }
+                }
+            }
+            if ($result.DefaultBranch -or $result.Branches.Count -gt 0) { return [pscustomobject]$result }
+        }
+        catch {}
+    }
+
+    try {
+        $headers = Get-GitHubApiHeaders
+        $repoResp = Invoke-WebRequest -Uri ("https://api.github.com/repos/{0}" -f $Repo) -UseBasicParsing -Headers $headers
+        $repoInfo = $repoResp.Content | ConvertFrom-Json
+        $result.DefaultBranch = [string]$repoInfo.default_branch
+
+        $branchesResp = Invoke-WebRequest -Uri ("https://api.github.com/repos/{0}/branches?per_page=100" -f $Repo) -UseBasicParsing -Headers $headers
+        foreach ($row in @($branchesResp.Content | ConvertFrom-Json)) {
+            $name = NormalizeGitHubRef ([string]$row.name)
+            if (-not [string]::IsNullOrWhiteSpace($name) -and -not $result.Branches.Contains($name)) {
+                $result.Branches.Add($name)
+            }
+        }
+    }
+    catch {}
+
+    return [pscustomobject]$result
+}
+function ResolveGitHubRefAuto {
+    if ($script:GitHubRefSpecified -and -not [string]::IsNullOrWhiteSpace($GitHubRef)) {
+        $script:ResolvedGitHubCommit = ''
+        return $GitHubRef
+    }
+
+    $info = Get-GitHubRemoteInfo -Repo $GitHubRepo
+    $preferred = [System.Collections.Generic.List[string]]::new()
+    foreach ($candidate in @($info.DefaultBranch, 'master', [string](Get-P 'github_ref' ''), 'latest')) {
+        $name = NormalizeGitHubRef $candidate
+        if (-not [string]::IsNullOrWhiteSpace($name) -and -not $preferred.Contains($name)) {
+            $preferred.Add($name)
+        }
+    }
+
+    foreach ($candidate in $preferred) {
+        if ($info.Branches.Contains($candidate)) {
+            Log "Auto-detected GitHub ref: $candidate"
+            return $candidate
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($info.DefaultBranch)) {
+        $defaultRef = NormalizeGitHubRef $info.DefaultBranch
+        if (-not [string]::IsNullOrWhiteSpace($defaultRef)) {
+            Log "Falling back to remote default branch: $defaultRef" 'WARN'
+            return $defaultRef
+        }
+    }
+
+    foreach ($candidate in @('master', 'latest')) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            Log "GitHub ref auto-detect failed; using fallback ref: $candidate" 'WARN'
+            return $candidate
+        }
+    }
+
+    throw 'Could not resolve a GitHub ref.'
+}
+function EnsureGitHubRefResolved {
+    $resolved = ResolveGitHubRefAuto
+    $script:GitHubRefSpecified = $true
+    $script:ResolvedGitHubCommit = ''
+    Set-Variable -Name GitHubRef -Scope Script -Value $resolved
+}
 function ResolveSourceRoot {
     $script:ResolvedPackageSource = $PackageSource
     if ($PackageSource -eq 'Local' -and (TestPkgRoot $SourcePath)) { return $SourcePath }
-    if ([string]::IsNullOrWhiteSpace($GitHubRepo) -or [string]::IsNullOrWhiteSpace($GitHubRef)) { throw 'GitHubRepo/GitHubRef is required for GitHub package source.' }
+    if ([string]::IsNullOrWhiteSpace($GitHubRepo)) { throw 'GitHubRepo is required for GitHub package source.' }
+    if ([string]::IsNullOrWhiteSpace($GitHubRef)) { EnsureGitHubRefResolved }
+    if ([string]::IsNullOrWhiteSpace($GitHubRef)) { throw 'GitHubRef could not be resolved for GitHub package source.' }
     $script:ResolvedPackageSource = 'GitHub'
     $fallbackRoots = @()
     if (TestPkgRoot $SourcePath) { $fallbackRoots += $SourcePath }
@@ -314,17 +431,6 @@ function ResolveSourceRoot {
 
 function Deploy([string]$SourceRoot, [string]$InstallRoot) {
     $keep = @{}; foreach ($e in (Arr 'preserve_existing_entries')) { $keep[$e.ToLowerInvariant()] = $true }
-    $winTextExt = @('.cmd', '.bat', '.reg', '.vbs')
-    function NormalizeWindowsTextFile([string]$Path) {
-        if (-not (Test-Path -LiteralPath $Path)) { return }
-        $ext = [System.IO.Path]::GetExtension($Path).ToLowerInvariant()
-        if ($winTextExt -notcontains $ext) { return }
-        $raw = Get-Content -LiteralPath $Path -Raw
-        $normalized = $raw -replace "`r?`n", "`r`n"
-        if ($normalized -ne $raw) {
-            Set-Content -LiteralPath $Path -Value $normalized -Encoding UTF8
-        }
-    }
     foreach ($rel in (DeployEntries)) {
         $src = Join-Path $SourceRoot $rel
         $dst = Join-Path $InstallRoot $rel
@@ -341,7 +447,6 @@ function Deploy([string]$SourceRoot, [string]$InstallRoot) {
         if ($preserve -and (Test-Path -LiteralPath $dst)) { continue }
         if ((Norm $src) -ieq (Norm $dst)) { continue }
         Copy-Item -LiteralPath $src -Destination $dst -Force
-        NormalizeWindowsTextFile -Path $dst
     }
 }
 
@@ -386,13 +491,87 @@ function SaveMeta([string]$InstallRoot, [string]$Mode) {
     $meta | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $metaPath -Encoding UTF8
 }
 
+function Resolve-ExplorerPathArgument([string]$PathToUse) {
+    if ([string]::IsNullOrWhiteSpace($PathToUse)) { return '' }
+
+    try {
+        $fullPath = [System.IO.Path]::GetFullPath($PathToUse)
+    }
+    catch {
+        return ''
+    }
+
+    if (-not (Test-Path -LiteralPath $fullPath -PathType Container)) { return '' }
+
+    $desktopPath = [Environment]::GetFolderPath('Desktop')
+    if ($fullPath.TrimEnd('\') -ieq $desktopPath.TrimEnd('\')) { return '' }
+
+    return $fullPath
+}
+
+function Get-ExplorerRestartPath {
+    foreach ($candidate in @($SourcePath, $InstallPath)) {
+        $resolved = Resolve-ExplorerPathArgument -PathToUse $candidate
+        if (-not [string]::IsNullOrWhiteSpace($resolved)) { return $resolved }
+    }
+    return ''
+}
+
 function RestartExplorer {
     if ($NoExplorerRestart) { Log 'Explorer restart skipped by -NoExplorerRestart.' 'WARN'; return }
     if (-not $Force) {
         $a = (Read-Host 'Restart Explorer now to refresh context menus? [Y/n]').Trim().ToLowerInvariant()
         if ($a -in @('n', 'no')) { Log 'Explorer restart skipped by user.' 'WARN'; return }
     }
-    try { Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue; Start-Process explorer.exe; Log 'Explorer restarted.' } catch { Log 'Explorer restart failed. Please restart manually.' 'WARN' }
+
+    $reopenPath = Get-ExplorerRestartPath
+    $runningExplorer = @(Get-Process -Name explorer -ErrorAction SilentlyContinue)
+
+    try {
+        foreach ($process in $runningExplorer) {
+            try {
+                Stop-Process -Id $process.Id -Force -ErrorAction Stop
+            }
+            catch {}
+        }
+        try {
+            Wait-Process -Name explorer -Timeout 5 -ErrorAction SilentlyContinue
+        }
+        catch {}
+
+        # Do not Start-Process explorer.exe here. Windows auto-restores the shell,
+        # and forcing a new explorer process can create a secondary zombie instance.
+        $shellAlive = $false
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        do {
+            Start-Sleep -Milliseconds 300
+            if (Get-Process -Name explorer -ErrorAction SilentlyContinue) { $shellAlive = $true }
+        } while (-not $shellAlive -and $sw.Elapsed.TotalSeconds -lt 10)
+
+        if (-not $shellAlive) {
+            Log 'Explorer shell did not auto-restart within timeout. Please restart manually.' 'WARN'
+            return
+        }
+
+        if ([string]::IsNullOrWhiteSpace($reopenPath)) {
+            Start-Sleep -Milliseconds 500
+            Log 'Explorer restarted (auto). No folder window was reopened.'
+            return
+        }
+
+        Start-Sleep -Seconds 2
+        try {
+            $shell = New-Object -ComObject Shell.Application
+            $shell.Open($reopenPath)
+            Log "Explorer restarted and reopened folder: $reopenPath"
+        }
+        catch {
+            Log "Explorer restarted, but folder reopen failed: $reopenPath" 'WARN'
+        }
+    }
+    catch {
+        Log 'Explorer restart failed. Please restart manually.' 'WARN'
+    }
 }
 
 function RunInstallOrUpdate([ValidateSet('Install', 'Update')] [string]$Mode) {
@@ -448,23 +627,103 @@ function ShowMenu {
     }
 }
 
-function ReadRefInteractive([string]$DefaultRef) {
-    $raw = Read-Host ("GitHub branch/ref (blank = {0})" -f $DefaultRef)
-    $candidate = if ($null -eq $raw) { '' } else { $raw.Trim() }
-    if ([string]::IsNullOrWhiteSpace($candidate)) { return $DefaultRef }
-    if ($candidate.StartsWith('refs/heads/', [System.StringComparison]::OrdinalIgnoreCase)) {
-        $candidate = $candidate.Substring('refs/heads/'.Length)
+function Get-GitHubBranchNames([string]$Repo) {
+    if ([string]::IsNullOrWhiteSpace($Repo)) { return @() }
+
+    $headers = @{ 'User-Agent' = "$($script:ToolName)Installer/$($script:InstallerVersion)" }
+    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
+        $headers['Authorization'] = "Bearer $($env:GITHUB_TOKEN)"
     }
-    if ([string]::IsNullOrWhiteSpace($candidate)) { return $DefaultRef }
-    return $candidate
+
+    try {
+        $resp = Invoke-RestMethod -Uri ("https://api.github.com/repos/{0}/branches?per_page=100" -f $Repo) -Headers $headers -Method Get
+        if (-not $resp) { return @() }
+        $names = @($resp | ForEach-Object { [string]$_.name } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        return @($names | Select-Object -Unique)
+    }
+    catch {
+        if (Get-Command gh.exe -ErrorAction SilentlyContinue) {
+            try {
+                $ghToken = (& gh.exe auth token 2>$null | Out-String).Trim()
+                if (-not [string]::IsNullOrWhiteSpace($ghToken)) {
+                    $authHeaders = @{
+                        'User-Agent' = "$($script:ToolName)Installer/$($script:InstallerVersion)"
+                        'Authorization' = "Bearer $ghToken"
+                        'Accept' = 'application/vnd.github+json'
+                    }
+                    $resp = Invoke-RestMethod -Uri ("https://api.github.com/repos/{0}/branches?per_page=100" -f $Repo) -Headers $authHeaders -Method Get
+                    if ($resp) {
+                        $names = @($resp | ForEach-Object { [string]$_.name } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                        return @($names | Select-Object -Unique)
+                    }
+                }
+            }
+            catch {}
+        }
+        Write-Host ("[!] Could not fetch branch list from GitHub: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+        return @()
+    }
+}
+
+function ReadRefInteractive([string]$DefaultRef) {
+    $normalizedDefault = if ([string]::IsNullOrWhiteSpace($DefaultRef)) { 'master' } else { $DefaultRef.Trim() }
+    $branches = @(Get-GitHubBranchNames -Repo $GitHubRepo)
+
+    if ($branches.Count -gt 0) {
+        if ($branches -notcontains $normalizedDefault) {
+            $branches = @($normalizedDefault) + @($branches)
+        }
+        else {
+            $branches = @($normalizedDefault) + @($branches | Where-Object { $_ -ne $normalizedDefault })
+        }
+        $branches = @($branches | Select-Object -Unique)
+
+        Write-Host ''
+        Write-Host ("Available branches for {0}:" -f $GitHubRepo) -ForegroundColor Cyan
+        for ($i = 0; $i -lt $branches.Count; $i++) {
+            $n = $i + 1
+            $name = $branches[$i]
+            $suffix = if ($name -eq $normalizedDefault) { ' (default)' } else { '' }
+            Write-Host ("[{0}] {1}{2}" -f $n, $name, $suffix) -ForegroundColor Gray
+        }
+        Write-Host '[M] Manual branch/ref input' -ForegroundColor Gray
+        Write-Host '[Enter] Use default' -ForegroundColor Gray
+
+        while ($true) {
+            $choice = (Read-Host ("Select branch number (blank = {0})" -f $normalizedDefault)).Trim()
+            if ([string]::IsNullOrWhiteSpace($choice)) { return $normalizedDefault }
+            if ($choice.Equals('m', [System.StringComparison]::OrdinalIgnoreCase)) { break }
+            if ($choice -match '^\d+$') {
+                $index = [int]$choice
+                if ($index -ge 1 -and $index -le $branches.Count) {
+                    return $branches[$index - 1]
+                }
+            }
+            Write-Host 'Invalid selection. Choose a number, M, or Enter.' -ForegroundColor Yellow
+        }
+    }
+
+    while ($true) {
+        $raw = Read-Host ("GitHub branch/ref (blank = {0})" -f $normalizedDefault)
+        $candidate = if ($null -eq $raw) { '' } else { $raw.Trim() }
+        if ([string]::IsNullOrWhiteSpace($candidate)) { return $normalizedDefault }
+        if ($candidate.StartsWith('refs/heads/', [System.StringComparison]::OrdinalIgnoreCase)) {
+            $candidate = $candidate.Substring('refs/heads/'.Length)
+        }
+        if ([string]::IsNullOrWhiteSpace($candidate)) {
+            Write-Host 'Invalid branch/ref. Try again.' -ForegroundColor Yellow
+            continue
+        }
+        return $candidate
+    }
 }
 
 if (-not $script:HasCliArgs) { $menuAction = ShowMenu; if ($menuAction -eq 'Exit') { exit 0 }; $Action = $menuAction }
 switch ($Action) {
-    'Install' { $PackageSource = 'GitHub'; if (-not $script:HasCliArgs) { $GitHubRef = ReadRefInteractive -DefaultRef $GitHubRef }; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Install $($script:DisplayName) to '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Install') }
-    'InstallGitHub' { $PackageSource = 'GitHub'; if (-not (Confirm "Install $($script:DisplayName) to '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Install') }
-    'Update' { $PackageSource = 'GitHub'; if (-not $script:HasCliArgs) { $GitHubRef = ReadRefInteractive -DefaultRef $GitHubRef }; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Update existing $($script:DisplayName) at '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Update') }
-    'UpdateGitHub' { $PackageSource = 'GitHub'; if (-not (Confirm "Update existing $($script:DisplayName) at '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Update') }
+    'Install' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; if (-not $script:HasCliArgs) { $GitHubRef = ReadRefInteractive -DefaultRef $GitHubRef }; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Install $($script:DisplayName) to '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Install') }
+    'InstallGitHub' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Install $($script:DisplayName) to '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Install') }
+    'Update' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; if (-not $script:HasCliArgs) { $GitHubRef = ReadRefInteractive -DefaultRef $GitHubRef }; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Update existing $($script:DisplayName) at '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Update') }
+    'UpdateGitHub' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Update existing $($script:DisplayName) at '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Update') }
     'Uninstall' { if (-not (Confirm "Uninstall $($script:DisplayName) from '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunUninstall) }
     'OpenInstallDirectory' { if (-not (Test-Path -LiteralPath $InstallPath)) { Write-Host ("Install directory not found: {0}" -f $InstallPath) -ForegroundColor Yellow; exit 1 }; Start-Process explorer.exe -ArgumentList $InstallPath; exit 0 }
     'OpenInstallLogs' { $logFile = Join-Path $InstallPath 'logs\\installer.log'; $logDir = Split-Path -Path $logFile -Parent; EnsureDir $logDir; if (Test-Path -LiteralPath $logFile) { Start-Process notepad.exe -ArgumentList $logFile } else { Start-Process explorer.exe -ArgumentList $logDir }; exit 0 }
