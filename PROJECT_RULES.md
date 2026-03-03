@@ -27,3 +27,19 @@
 - Guardrail/rule: In this repo, `SystemCleanup` is child-only under `HKCU\Software\Classes\DesktopBackground\Shell\SystemTools\shell\SystemCleanup`; the host parent is owned by `SystemTools`. Keep the manual `.reg` path aligned with the current repo path (`D:\Users\joty79\scripts\SystemCleanup`) and regenerate `Install.ps1` from current `InstallerCore` after template/profile changes.
 - Files affected: `Install.ps1`, `SystemCleanup.reg`, `PROJECT_RULES.md`.
 - Validation/tests run: Regenerated installer from `InstallerCore`; parser validation on `Install.ps1`; static review of manual `.reg`.
+
+### Entry - 2026-03-03 (Adopt Download Latest template action)
+- Date: 2026-03-03
+- Problem: Local repo workflows needed a way to refresh `SystemCleanup` from GitHub in place without installing to `%LOCALAPPDATA%` or touching registry state.
+- Root cause: Older generated installer snapshot predated the new `InstallerCore` `DownloadLatest` action.
+- Guardrail/rule: Keep `Install.ps1` regenerated from current `InstallerCore` when template action flow changes; `DownloadLatest` is a local working-copy sync action that updates `$PSScriptRoot`, skips install side effects, and relaunches the updated installer.
+- Files affected: `Install.ps1`, `PROJECT_RULES.md`.
+- Validation/tests run: Regenerated `Install.ps1` from current `InstallerCore`; parser validation via `Parser::ParseFile`.
+
+### Entry - 2026-03-03 (Download Latest menu order sync)
+- Date: 2026-03-03
+- Problem: `DownloadLatest` needed to appear directly below `Uninstall` during local repo testing, not after the open/log utility actions.
+- Root cause: Older generated installer snapshot used the first template menu ordering for the new action.
+- Guardrail/rule: Regenerate `Install.ps1` when template menu ordering changes; in this repo the `DownloadLatest` option should stay grouped with the core lifecycle actions.
+- Files affected: `Install.ps1`, `PROJECT_RULES.md`.
+- Validation/tests run: Regenerated `Install.ps1` from current `InstallerCore`; parser validation via `Parser::ParseFile`.
