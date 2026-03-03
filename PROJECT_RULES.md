@@ -93,3 +93,11 @@
 - Guardrail/rule: The correct workflow is: **[5] Reset Cache → Reboot → [2] Hide Updates**. Both the main menu and the Hide function display this warning prominently. `Reset-UpdateCache` now auto-purges any existing `.old_*` backup folders before creating new ones, and a new menu option `[6] Clean Stale Backup Folders` allows manual cleanup.
 - Files affected: `ManageUpdates.ps1`, `PROJECT_RULES.md`.
 - Validation/tests run: Static review of workflow warnings, `Remove-StaleOldFolders` function, and menu integration.
+
+### Entry - 2026-03-04 (ManageUpdates.ps1 missing from InstallerCore profile)
+- Date: 2026-03-04
+- Problem: Option `[3] Windows Update Manager` failed with "not recognized as a script file" when running from the installed location (`%LOCALAPPDATA%\SystemCleanupContext\`), but worked from the source repo.
+- Root cause: `ManageUpdates.ps1` was never added to the `InstallerCore` profile's `required_package_entries`, `deploy_entries`, or `verify_core_files`. The installer never copied it to the install directory.
+- Guardrail/rule: When adding new scripts that are called by existing scripts (like `SystemCleanup.cmd`), always update the InstallerCore profile to include them in deploy/verify lists, then regenerate the installer.
+- Files affected: `InstallerCore/profiles/SystemCleanup.json`, `Install.ps1` (regenerated), `PROJECT_RULES.md`.
+- Validation/tests run: Verified `ManageUpdates.ps1` absent from installed directory; confirmed profile update adds it to all 3 lists; re-install required to deploy the missing file.

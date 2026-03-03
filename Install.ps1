@@ -42,19 +42,22 @@ $script:ProfileJson = @'
     "Install.ps1",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
+    "ManageUpdates.ps1",
     "SystemCleanup.reg"
   ],
   "deploy_entries": [
     "Install.ps1",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
+    "ManageUpdates.ps1",
     "SystemCleanup.reg"
   ],
   "preserve_existing_entries": [],
   "verify_core_files": [
     "Install.ps1",
     "SystemCleanup.cmd",
-    "CleanInFlight.ps1"
+    "CleanInFlight.ps1",
+    "ManageUpdates.ps1"
   ],
   "migration_copy_entries": [
     "logs",
@@ -736,27 +739,6 @@ function ShowMenu {
         Write-Host '[0] Exit' -ForegroundColor Gray
         $c = (Read-Host 'Select option').Trim()
         switch ($c) { '1' { return 'Install' }; '2' { return 'Update' }; '3' { return 'Uninstall' }; '4' { return 'DownloadLatest' }; '5' { return 'OpenInstallDirectory' }; '6' { return 'OpenInstallLogs' }; '0' { return 'Exit' } }
-    }
-}
-
-function ReadPackageSourceInteractive([string]$DefaultSource = 'GitHub') {
-    $normalizedDefault = if ([string]::IsNullOrWhiteSpace($DefaultSource)) { 'GitHub' } else { $DefaultSource.Trim() }
-
-    while ($true) {
-        Write-Host ''
-        Write-Host 'Package source:' -ForegroundColor Cyan
-        Write-Host ('[1] GitHub{0}' -f ($(if ($normalizedDefault -eq 'GitHub') { ' (default)' } else { '' }))) -ForegroundColor Gray
-        Write-Host ('[2] Local{0}' -f ($(if ($normalizedDefault -eq 'Local') { ' (default)' } else { '' }))) -ForegroundColor Gray
-        Write-Host '[Enter] Use default' -ForegroundColor Gray
-
-        $choice = (Read-Host ("Select source (blank = {0})" -f $normalizedDefault)).Trim()
-        if ([string]::IsNullOrWhiteSpace($choice)) { return $normalizedDefault }
-
-        switch ($choice) {
-            '1' { return 'GitHub' }
-            '2' { return 'Local' }
-            default { Write-Host 'Invalid selection. Choose 1, 2, or Enter.' -ForegroundColor Yellow }
-        }
     }
 }
 
