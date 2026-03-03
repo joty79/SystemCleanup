@@ -61,3 +61,11 @@
 - Guardrail/rule: In this repo, interactive `Install` and `Update` must prompt for package source first (`GitHub` or `Local`) and only show branch selection when `GitHub` is selected.
 - Files affected: `Install.ps1`, `PROJECT_RULES.md`.
 - Validation/tests run: Parser validation on `Install.ps1`; static review of action switch flow.
+
+### Entry - 2026-03-03 (Batch and .reg files must stay CRLF)
+- Date: 2026-03-03
+- Problem: Launching `SystemCleanup.cmd` from the context menu produced broken `cmd.exe` parsing such as `'setlocal' is not recognized` and fragmented commands.
+- Root cause: `SystemCleanup.cmd` had LF/mixed line endings. `cmd.exe` is fragile with LF-only batch files and can tokenize commands incorrectly.
+- Guardrail/rule: In this repo, keep `*.cmd`, `*.bat`, and `*.reg` files in CRLF. Enforce with `.gitattributes` and normalize affected runtime artifacts before testing/installing.
+- Files affected: `.gitattributes`, `SystemCleanup.cmd`, `SystemCleanup.reg`, `PROJECT_RULES.md`.
+- Validation/tests run: `git ls-files --eol`; byte-level CR/LF count check on `SystemCleanup.cmd`.
