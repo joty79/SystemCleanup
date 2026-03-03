@@ -27,3 +27,21 @@
 - Guardrail/rule: In this repo, `SystemCleanup` is child-only under `HKCU\Software\Classes\DesktopBackground\Shell\SystemTools\shell\SystemCleanup`; the host parent is owned by `SystemTools`. Keep the manual `.reg` path aligned with the current repo path (`D:\Users\joty79\scripts\SystemCleanup`) and regenerate `Install.ps1` from current `InstallerCore` after template/profile changes.
 - Files affected: `Install.ps1`, `SystemCleanup.reg`, `PROJECT_RULES.md`.
 - Validation/tests run: Regenerated installer from `InstallerCore`; parser validation on `Install.ps1`; static review of manual `.reg`.
+
+### Entry - 2026-03-03 (Add folder background support under System Tools)
+- Date: 2026-03-03
+- Problem: `SystemCleanup` only appeared under `System Tools` on desktop background; it was missing on folder background.
+- Root cause: Both the manual `.reg` and the embedded installer profile only registered `DesktopBackground\Shell\SystemTools\shell\SystemCleanup`.
+- Guardrail/rule: In this repo, `SystemCleanup` must register both background child branches under the shared host:
+  - `HKCU\Software\Classes\Directory\Background\shell\SystemTools\shell\SystemCleanup`
+  - `HKCU\Software\Classes\DesktopBackground\Shell\SystemTools\shell\SystemCleanup`
+- Files affected: `Install.ps1`, `SystemCleanup.reg`, `PROJECT_RULES.md`.
+- Validation/tests run: Static review of `.reg` and embedded installer profile; parser validation on `Install.ps1`.
+
+### Entry - 2026-03-03 (Interactive installer must support Local source)
+- Date: 2026-03-03
+- Problem: Running local `Install.ps1` still forced the interactive user flow into GitHub branch selection, so local registry changes could not be tested from the menu path.
+- Root cause: The generated installer snapshot in this repo still hard-forced `PackageSource = 'GitHub'` for `Install` and `Update`.
+- Guardrail/rule: In this repo, interactive `Install` and `Update` must prompt for package source first (`GitHub` or `Local`) and only show branch selection when `GitHub` is selected.
+- Files affected: `Install.ps1`, `PROJECT_RULES.md`.
+- Validation/tests run: Parser validation on `Install.ps1`; static review of action switch flow.

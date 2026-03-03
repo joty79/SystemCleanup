@@ -64,12 +64,34 @@ $script:ProfileJson = @'
     "Install.ps1"
   ],
   "registry_cleanup_keys": [
+    "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemCleanup",
+    "HKCR\\Directory\\Background\\shell\\SystemCleanup",
+    "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
+    "HKCR\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
     "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemCleanup",
     "HKCR\\DesktopBackground\\Shell\\SystemCleanup",
     "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
     "HKCR\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup"
   ],
   "registry_values": [
+    {
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
+      "name": "MUIVerb",
+      "type": "REG_SZ",
+      "value": "Windows Update CleanUp"
+    },
+    {
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
+      "name": "Icon",
+      "type": "REG_SZ",
+      "value": "imageres.dll,-5323"
+    },
+    {
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup\\Command",
+      "name": "(default)",
+      "type": "REG_SZ",
+      "value": "cmd.exe /c \"{InstallRoot}\\SystemCleanup.cmd\""
+    },
     {
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
       "name": "MUIVerb",
@@ -90,6 +112,16 @@ $script:ProfileJson = @'
     }
   ],
   "registry_verify": [
+    {
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
+      "name": "MUIVerb",
+      "expected": "Windows Update CleanUp"
+    },
+    {
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup\\Command",
+      "name": "(default)",
+      "expected": "cmd.exe /c \"{InstallRoot}\\SystemCleanup.cmd\""
+    },
     {
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
       "name": "MUIVerb",
@@ -627,6 +659,27 @@ function ShowMenu {
     }
 }
 
+function ReadPackageSourceInteractive([string]$DefaultSource = 'GitHub') {
+    $normalizedDefault = if ([string]::IsNullOrWhiteSpace($DefaultSource)) { 'GitHub' } else { $DefaultSource.Trim() }
+
+    while ($true) {
+        Write-Host ''
+        Write-Host 'Package source:' -ForegroundColor Cyan
+        Write-Host ('[1] GitHub{0}' -f ($(if ($normalizedDefault -eq 'GitHub') { ' (default)' } else { '' }))) -ForegroundColor Gray
+        Write-Host ('[2] Local{0}' -f ($(if ($normalizedDefault -eq 'Local') { ' (default)' } else { '' }))) -ForegroundColor Gray
+        Write-Host '[Enter] Use default' -ForegroundColor Gray
+
+        $choice = (Read-Host ("Select source (blank = {0})" -f $normalizedDefault)).Trim()
+        if ([string]::IsNullOrWhiteSpace($choice)) { return $normalizedDefault }
+
+        switch ($choice) {
+            '1' { return 'GitHub' }
+            '2' { return 'Local' }
+            default { Write-Host 'Invalid selection. Choose 1, 2, or Enter.' -ForegroundColor Yellow }
+        }
+    }
+}
+
 function Get-GitHubBranchNames([string]$Repo) {
     if ([string]::IsNullOrWhiteSpace($Repo)) { return @() }
 
@@ -720,9 +773,33 @@ function ReadRefInteractive([string]$DefaultRef) {
 
 if (-not $script:HasCliArgs) { $menuAction = ShowMenu; if ($menuAction -eq 'Exit') { exit 0 }; $Action = $menuAction }
 switch ($Action) {
-    'Install' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; if (-not $script:HasCliArgs) { $GitHubRef = ReadRefInteractive -DefaultRef $GitHubRef }; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Install $($script:DisplayName) to '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Install') }
+    'Install' {
+        if (-not $script:HasCliArgs) { $PackageSource = ReadPackageSourceInteractive -DefaultSource 'GitHub' }
+        if ($PackageSource -eq 'GitHub') {
+            EnsureGitHubRefResolved
+            if (-not $script:HasCliArgs) { $GitHubRef = ReadRefInteractive -DefaultRef $GitHubRef }
+            Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan
+        }
+        else {
+            Write-Host ("Using local source: {0}" -f $SourcePath) -ForegroundColor DarkCyan
+        }
+        if (-not (Confirm "Install $($script:DisplayName) to '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }
+        exit (RunInstallOrUpdate -Mode 'Install')
+    }
     'InstallGitHub' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Install $($script:DisplayName) to '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Install') }
-    'Update' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; if (-not $script:HasCliArgs) { $GitHubRef = ReadRefInteractive -DefaultRef $GitHubRef }; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Update existing $($script:DisplayName) at '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Update') }
+    'Update' {
+        if (-not $script:HasCliArgs) { $PackageSource = ReadPackageSourceInteractive -DefaultSource 'GitHub' }
+        if ($PackageSource -eq 'GitHub') {
+            EnsureGitHubRefResolved
+            if (-not $script:HasCliArgs) { $GitHubRef = ReadRefInteractive -DefaultRef $GitHubRef }
+            Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan
+        }
+        else {
+            Write-Host ("Using local source: {0}" -f $SourcePath) -ForegroundColor DarkCyan
+        }
+        if (-not (Confirm "Update existing $($script:DisplayName) at '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }
+        exit (RunInstallOrUpdate -Mode 'Update')
+    }
     'UpdateGitHub' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Update existing $($script:DisplayName) at '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Update') }
     'Uninstall' { if (-not (Confirm "Uninstall $($script:DisplayName) from '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunUninstall) }
     'OpenInstallDirectory' { if (-not (Test-Path -LiteralPath $InstallPath)) { Write-Host ("Install directory not found: {0}" -f $InstallPath) -ForegroundColor Yellow; exit 1 }; Start-Process explorer.exe -ArgumentList $InstallPath; exit 0 }
