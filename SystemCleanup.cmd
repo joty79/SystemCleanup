@@ -65,11 +65,15 @@ echo.
 echo    %cYellow%[ 2 ]%cReset% InFlight Cleanup Only (MoveFileEx)
 echo          %cGray%Quick — schedules locked files for deletion on reboot%cReset%
 echo.
+echo    %cCyan%[ 3 ]%cReset% Windows Update Manager
+echo          %cGray%Hide/unhide/list updates, reset cache%cReset%
+echo.
 echo    %cRed%[ X ]%cReset% Close / Cancel
 echo.
-set /p "CHOICE=  Enter choice (1/2/X): "
+set /p "CHOICE=  Enter choice (1/2/3/X): "
 
 if /i "%CHOICE%"=="2" goto :InFlightOnly
+if /i "%CHOICE%"=="3" goto :ManageUpdates
 if /i "%CHOICE%"=="X" exit /b
 if "%CHOICE%" NEQ "1" (
     echo  %cRed%Invalid choice.%cReset%
@@ -132,6 +136,21 @@ echo    %cBold%  INFLIGHT CLEANUP (MoveFileEx/Registry)%cReset%
 echo %cCyan%==========================================%cReset%
 echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0CleanInFlight.ps1"
+echo.
+pause
+exit /b
+
+REM ---------------------------------------------------------
+REM OPTION 3: Windows Update Manager
+REM ---------------------------------------------------------
+:ManageUpdates
+cls
+echo.
+echo %cCyan%==========================================%cReset%
+echo    %cBold%  WINDOWS UPDATE MANAGER%cReset%
+echo %cCyan%==========================================%cReset%
+echo.
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1"
 echo.
 pause
 exit /b

@@ -69,3 +69,27 @@
 - Guardrail/rule: In this repo, keep `*.cmd`, `*.bat`, and `*.reg` files in CRLF. Enforce with `.gitattributes` and normalize affected runtime artifacts before testing/installing.
 - Files affected: `.gitattributes`, `SystemCleanup.cmd`, `SystemCleanup.reg`, `PROJECT_RULES.md`.
 - Validation/tests run: `git ls-files --eol`; byte-level CR/LF count check on `SystemCleanup.cmd`.
+
+### Entry - 2026-03-03 (CleanInFlight performance fix + WinSxS\Temp scope)
+- Date: 2026-03-03
+- Problem: `CleanInFlight.ps1` was significantly slower than `Manage_Ownership.ps1` for taking ownership of `WinSxS\Temp` contents.
+- Root cause: Three performance bottlenecks: (1) `| Out-Null` on `takeown /R` and `icacls /T` forced full pipeline buffering of thousands of output lines before discarding, (2) unnecessary `Start-Sleep -Seconds 2` after service stop, (3) `ArrayList.Add() | Out-Null` in loops. Additionally, scope was limited to `InFlight` subfolder instead of all `WinSxS\Temp` contents.
+- Guardrail/rule: Always use `> $null 2>&1` or `[void]` cast for output suppression in hot paths instead of `| Out-Null`; keep `WinSxS\Temp` folder itself intact but clean all contents inside it.
+- Files affected: `CleanInFlight.ps1`, `PROJECT_RULES.md`.
+- Validation/tests run: Static review of output suppression patterns and cleanup scope.
+
+### Entry - 2026-03-03 (Add Windows Update Manager — menu option 3)
+- Date: 2026-03-03
+- Problem: Hiding unwanted Windows Updates (e.g. fake WSL update) required manual use of `wushowhide.diagcab` GUI tool and sometimes full update cache reset.
+- Root cause: No programmatic way to hide/unhide updates was integrated into the SystemCleanup tool.
+- Guardrail/rule: `ManageUpdates.ps1` uses native `Microsoft.Update.Session` COM API (zero external dependencies) with `IUpdate.IsHidden` property. Menu option `[3]` in `SystemCleanup.cmd` launches it. The existing `Reset update services.ps1` functionality is subsumed by the Reset Update Cache submenu option inside the new script.
+- Files affected: `ManageUpdates.ps1` (new), `SystemCleanup.cmd`, `PROJECT_RULES.md`.
+- Validation/tests run: PowerShell parser syntax validation on `ManageUpdates.ps1`; static review of COM API usage and menu integration.
+
+### Entry - 2026-03-03 (Update hiding workflow & stale .old cleanup)
+- Date: 2026-03-03
+- Problem: Hiding updates only works reliably if the update cache is reset first and the PC is rebooted before hiding. Hiding first then resetting wipes the hidden flag and the update reappears. Also, `Reset-UpdateCache` left `.old_*` backup folders accumulating forever.
+- Root cause: The Windows Update COM API `IsHidden` flag is stored alongside the cached update metadata. Resetting the cache (renaming `SoftwareDistribution`) destroys that metadata, so the hide must happen on a fresh post-reboot scan.
+- Guardrail/rule: The correct workflow is: **[5] Reset Cache → Reboot → [2] Hide Updates**. Both the main menu and the Hide function display this warning prominently. `Reset-UpdateCache` now auto-purges any existing `.old_*` backup folders before creating new ones, and a new menu option `[6] Clean Stale Backup Folders` allows manual cleanup.
+- Files affected: `ManageUpdates.ps1`, `PROJECT_RULES.md`.
+- Validation/tests run: Static review of workflow warnings, `Remove-StaleOldFolders` function, and menu integration.
