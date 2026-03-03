@@ -739,6 +739,27 @@ function ShowMenu {
     }
 }
 
+function ReadPackageSourceInteractive([string]$DefaultSource = 'GitHub') {
+    $normalizedDefault = if ([string]::IsNullOrWhiteSpace($DefaultSource)) { 'GitHub' } else { $DefaultSource.Trim() }
+
+    while ($true) {
+        Write-Host ''
+        Write-Host 'Package source:' -ForegroundColor Cyan
+        Write-Host ('[1] GitHub{0}' -f ($(if ($normalizedDefault -eq 'GitHub') { ' (default)' } else { '' }))) -ForegroundColor Gray
+        Write-Host ('[2] Local{0}' -f ($(if ($normalizedDefault -eq 'Local') { ' (default)' } else { '' }))) -ForegroundColor Gray
+        Write-Host '[Enter] Use default' -ForegroundColor Gray
+
+        $choice = (Read-Host ("Select source (blank = {0})" -f $normalizedDefault)).Trim()
+        if ([string]::IsNullOrWhiteSpace($choice)) { return $normalizedDefault }
+
+        switch ($choice) {
+            '1' { return 'GitHub' }
+            '2' { return 'Local' }
+            default { Write-Host 'Invalid selection. Choose 1, 2, or Enter.' -ForegroundColor Yellow }
+        }
+    }
+}
+
 function Get-GitHubBranchNames([string]$Repo) {
     if ([string]::IsNullOrWhiteSpace($Repo)) { return @() }
 

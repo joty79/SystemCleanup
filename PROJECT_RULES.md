@@ -43,3 +43,21 @@
 - Guardrail/rule: Regenerate `Install.ps1` when template menu ordering changes; in this repo the `DownloadLatest` option should stay grouped with the core lifecycle actions.
 - Files affected: `Install.ps1`, `PROJECT_RULES.md`.
 - Validation/tests run: Regenerated `Install.ps1` from current `InstallerCore`; parser validation via `Parser::ParseFile`.
+
+### Entry - 2026-03-03 (Add folder background support under System Tools)
+- Date: 2026-03-03
+- Problem: `SystemCleanup` only appeared under `System Tools` on desktop background; it was missing on folder background.
+- Root cause: Both the manual `.reg` and the embedded installer profile only registered `DesktopBackground\Shell\SystemTools\shell\SystemCleanup`.
+- Guardrail/rule: In this repo, `SystemCleanup` must register both background child branches under the shared host:
+  - `HKCU\Software\Classes\Directory\Background\shell\SystemTools\shell\SystemCleanup`
+  - `HKCU\Software\Classes\DesktopBackground\Shell\SystemTools\shell\SystemCleanup`
+- Files affected: `Install.ps1`, `SystemCleanup.reg`, `PROJECT_RULES.md`.
+- Validation/tests run: Static review of `.reg` and embedded installer profile; parser validation on `Install.ps1`.
+
+### Entry - 2026-03-03 (Interactive installer must support Local source)
+- Date: 2026-03-03
+- Problem: Running local `Install.ps1` still forced the interactive user flow into GitHub branch selection, so local registry changes could not be tested from the menu path.
+- Root cause: The generated installer snapshot in this repo still hard-forced `PackageSource = 'GitHub'` for `Install` and `Update`.
+- Guardrail/rule: In this repo, interactive `Install` and `Update` must prompt for package source first (`GitHub` or `Local`) and only show branch selection when `GitHub` is selected.
+- Files affected: `Install.ps1`, `PROJECT_RULES.md`.
+- Validation/tests run: Parser validation on `Install.ps1`; static review of action switch flow.
