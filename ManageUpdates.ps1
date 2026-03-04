@@ -382,9 +382,20 @@ function Reset-UpdateCache {
 function Get-Win11BlockStatus {
     $policyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
     if (-not (Test-Path $policyPath)) { return $false }
-    $trv = Get-ItemProperty -Path $policyPath -Name 'TargetReleaseVersion' -ErrorAction SilentlyContinue
-    $pv  = Get-ItemProperty -Path $policyPath -Name 'ProductVersion' -ErrorAction SilentlyContinue
-    return ($null -ne $trv -and $trv.TargetReleaseVersion -eq 1 -and $null -ne $pv -and $pv.ProductVersion -eq 'Windows 10')
+
+    # Read values robustly — accept both REG_DWORD 1 and REG_SZ "1"
+    $props = Get-ItemProperty -Path $policyPath -ErrorAction SilentlyContinue
+    if ($null -eq $props) { return $false }
+
+    $trvRaw = $props.PSObject.Properties['TargetReleaseVersion']
+    $pvRaw  = $props.PSObject.Properties['ProductVersion']
+
+    if ($null -eq $trvRaw -or $null -eq $pvRaw) { return $false }
+
+    $trvMatch = ([string]$trvRaw.Value).Trim() -eq '1'
+    $pvMatch  = ([string]$pvRaw.Value).Trim() -ieq 'Windows 10'
+
+    return ($trvMatch -and $pvMatch)
 }
 
 function Set-Win11Block {
