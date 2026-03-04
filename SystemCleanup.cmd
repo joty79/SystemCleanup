@@ -51,6 +51,7 @@ set "LogFile=%LogDir%\SystemCleanup_%mydate%_%mytime%.log"
 REM ---------------------------------------------------------
 REM MENU SCREEN
 REM ---------------------------------------------------------
+:Menu
 cls
 echo.
 echo %cCyan%==========================================%cReset%
@@ -66,7 +67,7 @@ echo    %cYellow%[ 2 ]%cReset% InFlight Cleanup Only (MoveFileEx)
 echo          %cGray%Quick — schedules locked files for deletion on reboot%cReset%
 echo.
 echo    %cCyan%[ 3 ]%cReset% Windows Update Manager
-echo          %cGray%Hide/unhide/list updates, reset cache%cReset%
+echo          %cGray%Hide/unhide/list updates, reset cache, block Win11%cReset%
 echo.
 echo    %cRed%[ X ]%cReset% Close / Cancel
 echo.
@@ -77,8 +78,8 @@ if /i "%CHOICE%"=="3" goto :ManageUpdates
 if /i "%CHOICE%"=="X" exit /b
 if "%CHOICE%" NEQ "1" (
     echo  %cRed%Invalid choice.%cReset%
-    pause
-    exit /b
+    timeout /t 2 /nobreak >nul
+    goto :Menu
 )
 
 REM ---------------------------------------------------------
@@ -123,7 +124,7 @@ echo   %cYellow%  [~]   FIXED: Repaired issues%cReset%         %cGray%(Fixed)%cR
 echo   %cRed%  [X]   FAILED: Could not repair%cReset%        %cGray%(Failed)%cReset%
 echo.
 pause
-exit /b
+goto :Menu
 
 REM ---------------------------------------------------------
 REM OPTION 2: InFlight Cleanup Only (MoveFileEx)
@@ -138,7 +139,7 @@ echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0CleanInFlight.ps1"
 echo.
 pause
-exit /b
+goto :Menu
 
 REM ---------------------------------------------------------
 REM OPTION 3: Windows Update Manager
@@ -152,8 +153,7 @@ echo %cCyan%==========================================%cReset%
 echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1"
 echo.
-pause
-exit /b
+goto :Menu
 
 REM ---------------------------------------------------------
 REM HELPER FUNCTIONS

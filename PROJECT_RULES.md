@@ -101,3 +101,19 @@
 - Guardrail/rule: When adding new scripts that are called by existing scripts (like `SystemCleanup.cmd`), always update the InstallerCore profile to include them in deploy/verify lists, then regenerate the installer.
 - Files affected: `InstallerCore/profiles/SystemCleanup.json`, `Install.ps1` (regenerated), `PROJECT_RULES.md`.
 - Validation/tests run: Verified `ManageUpdates.ps1` absent from installed directory; confirmed profile update adds it to all 3 lists; re-install required to deploy the missing file.
+
+### Entry - 2026-03-04 (ESC returns to main menu + menu loop)
+- Date: 2026-03-04
+- Problem: Pressing `[X]` in `ManageUpdates.ps1` submenus or the CMD main menu closed the entire tool. Users wanted to navigate back instead of exiting.
+- Root cause: The CMD script used `exit /b` after each option, and `ManageUpdates.ps1` used `Read-Host` for menu input which required Enter.
+- Guardrail/rule: `SystemCleanup.cmd` now loops on all options via `goto :Menu` instead of `exit /b`. `ManageUpdates.ps1` uses `ReadKey` for menu navigation so ESC instantly returns to the CMD main menu. Both `ESC` and `X` exit the PS script loop.
+- Files affected: `SystemCleanup.cmd`, `ManageUpdates.ps1`, `PROJECT_RULES.md`.
+- Validation/tests run: Static review of `goto` flow and ReadKey-based menu input.
+
+### Entry - 2026-03-04 (Block Windows 11 upgrade via Group Policy)
+- Date: 2026-03-04
+- Problem: Users on Windows 10 wanted to prevent Windows 11 from being offered via Windows Update.
+- Root cause: No built-in toggle — requires manual Group Policy registry edits.
+- Guardrail/rule: New option `[7]` in `ManageUpdates.ps1` toggles `TargetReleaseVersion` / `TargetReleaseVersionInfo` / `ProductVersion` under `HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate`. Auto-detects current Win10 build. Shows live status indicator on menu (blocked/not blocked). Warns if already on Windows 11. Runs `gpupdate /force` after changes. On unblock, cleans up the registry key entirely if empty.
+- Files affected: `ManageUpdates.ps1`, `PROJECT_RULES.md`.
+- Validation/tests run: Static review of registry operations and toggle logic; OS build detection via `OSVersion.Version.Build`.

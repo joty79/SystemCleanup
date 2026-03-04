@@ -8,7 +8,7 @@
 
 <p align="center">
   <b>One-click system maintenance, repair & update management from your desktop context menu</b><br>
-  <sub>SFC · DISM · WinSxS cleanup · Windows Update hiding — all in one tool, zero dependencies</sub>
+  <sub>SFC · DISM · WinSxS cleanup · Windows Update hiding · Win11 upgrade block — all in one tool, zero dependencies</sub>
 </p>
 
 ---
@@ -19,7 +19,8 @@
 |:-:|------|-------------|
 | 🔧 | **[Full Cleanup](#-full-cleanup)** | SFC → DISM → WinSxS Temp cleanup in a single automated flow |
 | ⚡ | **[InFlight Cleanup](#-inflight-cleanup)** | Quick-clean locked files from `WinSxS\Temp` using `MoveFileEx` |
-| 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache — no external tools needed |
+| 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, block Win11 upgrade |
+| 📦 | **[Installer](#-installation)** | One-command setup with context menu registration and GitHub updates |
 
 ---
 
@@ -54,7 +55,7 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`.
+Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. After any option completes, the tool **returns to the main menu** — only `[X]` exits.
 
 ### Usage
 
@@ -126,7 +127,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\CleanInFlight.ps1 -SilentCaller
 
 ## 🔄 Windows Update Manager
 
-> Hide unwanted Windows Updates permanently using the native COM API — no `wushowhide.diagcab` needed.
+> Hide unwanted Windows Updates, block Windows 11 upgrades, and reset the update cache — all using the native COM API, no external tools needed.
 
 ### The Problem
 
@@ -134,6 +135,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\CleanInFlight.ps1 -SilentCaller
 - The only built-in way to hide updates is the **`wushowhide.diagcab`** GUI tool — slow and manual
 - Hiding an update *before* clearing the cache doesn't stick — the flag gets wiped on next cache reset
 - Cache reset leaves behind **`.old` backup folders** that accumulate and waste disk space
+- Windows 10 machines get **nagged to upgrade to Windows 11** with no easy off switch
 
 ### The Solution
 
@@ -154,11 +156,13 @@ A full interactive submenu using the native `Microsoft.Update.Session` COM API �
 │  [5]  Reset Update Cache    ← stops services + cleanup    │
 │  [6]  Clean Stale Backups   ← remove .old_* folders       │
 │  ──────────────────────────────────────────               │
-│  [X]  Back / Exit                                        │
+│  [7]  Block Windows 11      ← Group Policy toggle 🟢/🔴  │
+│  ──────────────────────────────────────────               │
+│  [ESC] Back to main menu                                 │
 └──────────────────────────────────────────────────────────┘
 ```
 
-The COM API's `IUpdate.IsHidden` property is what `wushowhide.diagcab` uses internally — same mechanism, fully scriptable.
+The menu uses **single-keypress navigation** — press a number to select, `ESC` to go back to the main SystemCleanup menu. No Enter key needed.
 
 ### ⚠️ Critical: Correct Workflow Order
 
@@ -173,6 +177,31 @@ Hiding updates only works reliably when done **after** a cache reset and reboot:
 ```
 
 If you hide first then reset, the `IsHidden` flag is stored in `SoftwareDistribution` — resetting destroys it and the update reappears.
+
+### Block Windows 11 Upgrade
+
+Option `[7]` toggles a Group Policy lock that pins the machine to Windows 10:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  BLOCK WINDOWS 11 — How It Works                         │
+│                                                          │
+│  Sets three registry values under:                       │
+│  HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate  │
+│                                                          │
+│  TargetReleaseVersion     = 1      (DWORD)               │
+│  TargetReleaseVersionInfo = 22H2   (auto-detected)       │
+│  ProductVersion           = Windows 10                   │
+│                                                          │
+│  + gpupdate /force to apply immediately                  │
+│                                                          │
+│  Toggle: ON → removes all three values                   │
+│  Menu:   Shows live status [🟢 Blocked] / [🔴 Not blocked] │
+│  Guard:  Warns if already running Windows 11             │
+└──────────────────────────────────────────────────────────┘
+```
+
+The Win10 build version (e.g. `22H2`) is **auto-detected** from your system — not hardcoded. You'll still receive Windows 10 security updates.
 
 ### Usage
 
@@ -210,10 +239,6 @@ Selection: 'KB5034441'  ← hide by KB number
 # Install (registers context menu + copies files)
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -Action Install
 
-# Verify installation
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -Action Install
-# → installer will detect existing install and show status
-
 # Update from GitHub
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -Action Update
 
@@ -235,7 +260,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -Action Uninstall -F
 - Copies runtime files to `%LOCALAPPDATA%\SystemCleanupContext\`
 - Registers context menu under **System Tools** submenu (desktop + folder backgrounds)
 - Adds uninstall entry to Programs & Features
-- Supports GitHub-based updates with branch selection
+- Supports GitHub-based updates with interactive branch selection
 
 ---
 
@@ -243,15 +268,16 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -Action Uninstall -F
 
 ```
 SystemCleanup/
-├── SystemCleanup.cmd      # Main menu launcher (CMD, auto-elevates)
-├── CleanInFlight.ps1      # WinSxS\Temp cleanup with MoveFileEx fallback
-├── ManageUpdates.ps1      # Windows Update Manager (COM API)
-├── Install.ps1            # Installer/updater/uninstaller (InstallerCore)
-├── SystemCleanup.reg      # Static registry sample (manual import)
-├── .gitattributes         # Enforces CRLF for .cmd and .reg files
-├── .gitignore             # Excludes legacy/test artifacts
-├── PROJECT_RULES.md       # Decision log and project guardrails
-└── README.md              # You are here
+├── SystemCleanup.cmd          # Main menu launcher (CMD, auto-elevates, loops)
+├── CleanInFlight.ps1          # WinSxS\Temp cleanup with MoveFileEx fallback
+├── ManageUpdates.ps1          # Windows Update Manager + Win11 block (COM API)
+├── Install.ps1                # Installer/updater/uninstaller (InstallerCore)
+├── SystemCleanup.reg          # Static registry sample (manual import)
+├── Reset update services.ps1  # Legacy update services reset script
+├── .gitattributes             # Enforces CRLF for .cmd and .reg files
+├── .gitignore                 # Excludes legacy/test artifacts
+├── PROJECT_RULES.md           # Decision log and project guardrails
+└── README.md                  # You are here
 ```
 
 ---
@@ -286,8 +312,22 @@ The `IsHidden` flag is stored in the **Windows Update metadata cache** inside `C
 
 </details>
 
+<details>
+<summary><b>Why Group Policy for blocking Windows 11 instead of hiding the update?</b></summary>
+
+Simply hiding the Windows 11 upgrade via `IsHidden` doesn't survive cache resets, and Windows can re-offer it through different KB articles over time. The **Group Policy** approach (`TargetReleaseVersion` + `ProductVersion`) tells Windows Update at the policy level to stay on Windows 10 — it's the same mechanism enterprises use, and it doesn't require hiding individual updates. You still receive all Windows 10 security patches.
+
+</details>
+
+<details>
+<summary><b>Why single-keypress menu navigation?</b></summary>
+
+The Windows Update Manager uses `ReadKey` instead of `Read-Host` for menu input. This means you press a single key (1–7, X, or ESC) and the action fires immediately — no Enter needed. `ESC` returns to the main SystemCleanup CMD menu instead of closing the tool, making the navigation feel responsive and preventing accidental exits.
+
+</details>
+
 ---
 
 <p align="center">
-  <sub>Built for Windows 10/11 · Zero external dependencies · Admin rights auto-requested when needed</sub>
+  <sub>Built for Windows 10/11 · Zero external dependencies · Admin rights auto-requested · ESC navigates back</sub>
 </p>
