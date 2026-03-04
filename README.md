@@ -198,10 +198,13 @@ Option `[7]` toggles a Group Policy lock that pins the machine to Windows 10:
 │  Toggle: ON → removes all three values                   │
 │  Menu:   Shows live status [🟢 Blocked] / [🔴 Not blocked] │
 │  Guard:  Warns if already running Windows 11             │
+│  Detect: Accepts both REG_DWORD and REG_SZ values        │
 └──────────────────────────────────────────────────────────┘
 ```
 
 The Win10 build version (e.g. `22H2`) is **auto-detected** from your system — not hardcoded. You'll still receive Windows 10 security updates.
+
+> **Note:** The same registry key often contains additional update policy values (e.g. `AUOptions`, `ExcludeWUDriversInQualityUpdate`, `NoAutoRebootWithLoggedOnUsers`). These are set independently via Group Policy or manual registry edits and coexist safely with the Win11 block values. The script only manages the three target-version entries — it never touches your other update policies.
 
 ### Usage
 
@@ -316,6 +319,13 @@ The `IsHidden` flag is stored in the **Windows Update metadata cache** inside `C
 <summary><b>Why Group Policy for blocking Windows 11 instead of hiding the update?</b></summary>
 
 Simply hiding the Windows 11 upgrade via `IsHidden` doesn't survive cache resets, and Windows can re-offer it through different KB articles over time. The **Group Policy** approach (`TargetReleaseVersion` + `ProductVersion`) tells Windows Update at the policy level to stay on Windows 10 — it's the same mechanism enterprises use, and it doesn't require hiding individual updates. You still receive all Windows 10 security patches.
+
+</details>
+
+<details>
+<summary><b>Why does Win11 block detection cast registry values to string?</b></summary>
+
+`TargetReleaseVersion` can be stored as either `REG_DWORD` (by the script using `-Type DWord`) or `REG_SZ` (by `gpedit.msc`, `reg.exe`, or `Set-ItemProperty` without `-Type`). PowerShell's `-eq 1` comparison behaves differently depending on the underlying .NET type. The detection function reads via `PSObject.Properties` and casts to `[string]` before comparing — e.g. `([string]$value).Trim() -eq '1'` — so it works identically regardless of how the value was originally written.
 
 </details>
 
