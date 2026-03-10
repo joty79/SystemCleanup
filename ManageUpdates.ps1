@@ -379,23 +379,76 @@ function Reset-UpdateCache {
 # ─────────────────────────────────────────────
 # 🔵 ACTION: Block / Unblock Windows 11 Upgrade
 # ─────────────────────────────────────────────
-function Get-Win11BlockStatus {
-    $policyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
-    if (-not (Test-Path $policyPath)) { return $false }
+function Get-Win10TargetReleaseVersion {
+    return '22H2'
+}
 
-    # Read values robustly — accept both REG_DWORD 1 and REG_SZ "1"
+function Set-RegistryPolicyValue {
+    param(
+        [string]$Path,
+        [string]$Name,
+        [object]$Value,
+        [ValidateSet('String', 'DWord')]
+        [string]$PropertyType
+    )
+
+    Remove-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
+    New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
+}
+
+function Get-Win11BlockState {
+    $policyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
+    $expectedTarget = Get-Win10TargetReleaseVersion
+    $state = [ordered]@{
+        PolicyPath = $policyPath
+        ExpectedTargetReleaseVersionInfo = $expectedTarget
+        TargetReleaseVersion = ''
+        TargetReleaseVersionInfo = ''
+        ProductVersion = ''
+        IsBlocked = $false
+        StatusLabel = 'Not configured'
+    }
+
+    if (-not (Test-Path $policyPath)) {
+        return [pscustomobject]$state
+    }
+
     $props = Get-ItemProperty -Path $policyPath -ErrorAction SilentlyContinue
-    if ($null -eq $props) { return $false }
+    if ($null -eq $props) {
+        return [pscustomobject]$state
+    }
 
     $trvRaw = $props.PSObject.Properties['TargetReleaseVersion']
+    $trviRaw = $props.PSObject.Properties['TargetReleaseVersionInfo']
     $pvRaw  = $props.PSObject.Properties['ProductVersion']
 
-    if ($null -eq $trvRaw -or $null -eq $pvRaw) { return $false }
+    if ($null -ne $trvRaw) {
+        $state.TargetReleaseVersion = ([string]$trvRaw.Value).Trim()
+    }
+    if ($null -ne $trviRaw) {
+        $state.TargetReleaseVersionInfo = ([string]$trviRaw.Value).Trim()
+    }
+    if ($null -ne $pvRaw) {
+        $state.ProductVersion = ([string]$pvRaw.Value).Trim()
+    }
 
-    $trvMatch = ([string]$trvRaw.Value).Trim() -eq '1'
-    $pvMatch  = ([string]$pvRaw.Value).Trim() -ieq 'Windows 10'
+    $trvMatch = $state.TargetReleaseVersion -eq '1'
+    $trviMatch = $state.TargetReleaseVersionInfo -ieq $expectedTarget
+    $pvMatch  = $state.ProductVersion -ieq 'Windows 10'
 
-    return ($trvMatch -and $pvMatch)
+    if ($trvMatch -and $trviMatch -and $pvMatch) {
+        $state.IsBlocked = $true
+        $state.StatusLabel = 'Policy active'
+    }
+    elseif ($state.TargetReleaseVersion -or $state.TargetReleaseVersionInfo -or $state.ProductVersion) {
+        $state.StatusLabel = 'Policy mismatch'
+    }
+
+    return [pscustomobject]$state
+}
+
+function Get-Win11BlockStatus {
+    return (Get-Win11BlockState).IsBlocked
 }
 
 function Set-Win11Block {
@@ -404,39 +457,43 @@ function Set-Win11Block {
     $policyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
 
     if ($Block) {
-        # Detect current Windows 10 build version (e.g. 22H2)
-        $currentBuild = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'DisplayVersion' -ErrorAction SilentlyContinue).DisplayVersion
-        if ([string]::IsNullOrWhiteSpace($currentBuild)) {
-            # Fallback to ReleaseId for older builds
-            $currentBuild = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'ReleaseId' -ErrorAction SilentlyContinue).ReleaseId
-        }
-        if ([string]::IsNullOrWhiteSpace($currentBuild)) {
-            $currentBuild = '22H2'
-        }
+        $targetRelease = Get-Win10TargetReleaseVersion
 
         Write-Host "`n  🔵 BLOCKING WINDOWS 11 UPGRADE" -ForegroundColor Cyan
         Write-Host "  $('─' * 40)" -ForegroundColor DarkGray
-        Write-Host "  Setting Group Policy to stay on Windows 10 ($currentBuild)..." -ForegroundColor Gray
+        Write-Host "  Setting Windows Update policy to stay on Windows 10 ($targetRelease)..." -ForegroundColor Gray
 
         if (-not (Test-Path $policyPath)) {
             New-Item -Path $policyPath -Force | Out-Null
         }
-        Set-ItemProperty -Path $policyPath -Name 'TargetReleaseVersion' -Value 1 -Type DWord -Force
-        Set-ItemProperty -Path $policyPath -Name 'TargetReleaseVersionInfo' -Value $currentBuild -Type String -Force
-        Set-ItemProperty -Path $policyPath -Name 'ProductVersion' -Value 'Windows 10' -Type String -Force
+        Set-RegistryPolicyValue -Path $policyPath -Name 'TargetReleaseVersion' -Value 1 -PropertyType DWord
+        Set-RegistryPolicyValue -Path $policyPath -Name 'TargetReleaseVersionInfo' -Value $targetRelease -PropertyType String
+        Set-RegistryPolicyValue -Path $policyPath -Name 'ProductVersion' -Value 'Windows 10' -PropertyType String
+
+        $state = Get-Win11BlockState
 
         Write-Host ""
-        Write-Host "  ✅ Windows 11 upgrade BLOCKED!" -ForegroundColor Green
-        Write-Host "      TargetReleaseVersion     = 1" -ForegroundColor DarkGray
-        Write-Host "      TargetReleaseVersionInfo = $currentBuild" -ForegroundColor DarkGray
-        Write-Host "      ProductVersion           = Windows 10" -ForegroundColor DarkGray
+        if (-not $state.IsBlocked) {
+            Write-Host "  ❌ Policy write/readback verification failed." -ForegroundColor Red
+            Write-Host "      TargetReleaseVersion     = $($state.TargetReleaseVersion)" -ForegroundColor DarkGray
+            Write-Host "      TargetReleaseVersionInfo = $($state.TargetReleaseVersionInfo)" -ForegroundColor DarkGray
+            Write-Host "      ProductVersion           = $($state.ProductVersion)" -ForegroundColor DarkGray
+            Write-Host "      Expected target          = $($state.ExpectedTargetReleaseVersionInfo)" -ForegroundColor DarkGray
+            return
+        }
+
+        Write-Host "  ✅ Windows 11 upgrade policy configured." -ForegroundColor Green
+        Write-Host "      TargetReleaseVersion     = $($state.TargetReleaseVersion)" -ForegroundColor DarkGray
+        Write-Host "      TargetReleaseVersionInfo = $($state.TargetReleaseVersionInfo)" -ForegroundColor DarkGray
+        Write-Host "      ProductVersion           = $($state.ProductVersion)" -ForegroundColor DarkGray
         Write-Host ""
         Write-Host "  Refreshing Group Policy..." -ForegroundColor Gray
         gpupdate /force 2>&1 | Out-Null
         Write-Host "  ✅ Group Policy refreshed." -ForegroundColor Green
         Write-Host ""
-        Write-Host "  💡 Windows Update will no longer offer Windows 11." -ForegroundColor Cyan
-        Write-Host "     You will still receive Windows 10 security updates." -ForegroundColor DarkGray
+        Write-Host "  💡 This blocks the Windows 11 feature upgrade offer by policy." -ForegroundColor Cyan
+        Write-Host "     If Windows Update already cached the offer, reboot and check again." -ForegroundColor DarkGray
+        Write-Host "     Eligibility/info banners may still appear even when the feature upgrade is blocked." -ForegroundColor DarkGray
     }
     else {
         Write-Host "`n  🔵 REMOVING WINDOWS 11 BLOCK" -ForegroundColor Cyan
@@ -456,8 +513,15 @@ function Set-Win11Block {
             }
         }
 
+        $state = Get-Win11BlockState
+
         Write-Host ""
-        Write-Host "  ✅ Windows 11 block REMOVED!" -ForegroundColor Green
+        if ($state.IsBlocked) {
+            Write-Host "  ❌ Policy removal verification failed." -ForegroundColor Red
+            return
+        }
+
+        Write-Host "  ✅ Windows 11 block policy removed." -ForegroundColor Green
         Write-Host ""
         Write-Host "  Refreshing Group Policy..." -ForegroundColor Gray
         gpupdate /force 2>&1 | Out-Null
@@ -468,7 +532,7 @@ function Set-Win11Block {
 }
 
 function Toggle-Win11Block {
-    $isBlocked = Get-Win11BlockStatus
+    $state = Get-Win11BlockState
 
     # Check if we're actually running Windows 10
     $osBuild = [System.Environment]::OSVersion.Version.Build
@@ -487,11 +551,11 @@ function Toggle-Win11Block {
         }
     }
 
-    if ($isBlocked) {
+    if ($state.IsBlocked) {
         Write-Host ""
         Write-Host "  Current status: " -ForegroundColor White -NoNewline
-        Write-Host "BLOCKED ✅" -ForegroundColor Green
-        Write-Host "  Windows 11 upgrade is currently blocked via Group Policy." -ForegroundColor DarkGray
+        Write-Host "POLICY ACTIVE ✅" -ForegroundColor Green
+        Write-Host "  Windows 11 feature upgrade is currently blocked via policy." -ForegroundColor DarkGray
         Write-Host ""
         Write-Host "  Do you want to REMOVE the block? (Y/N)" -ForegroundColor Gray
         $confirm = Read-Host "  Choice"
@@ -504,8 +568,18 @@ function Toggle-Win11Block {
     else {
         Write-Host ""
         Write-Host "  Current status: " -ForegroundColor White -NoNewline
-        Write-Host "NOT BLOCKED ⚠️" -ForegroundColor Yellow
-        Write-Host "  Windows Update may offer Windows 11 if your hardware is compatible." -ForegroundColor DarkGray
+        if ($state.StatusLabel -eq 'Policy mismatch') {
+            Write-Host "POLICY MISMATCH ⚠️" -ForegroundColor Yellow
+            Write-Host "  The registry contains partial/invalid Win11 block values." -ForegroundColor DarkGray
+            Write-Host "      TargetReleaseVersion     = $($state.TargetReleaseVersion)" -ForegroundColor DarkGray
+            Write-Host "      TargetReleaseVersionInfo = $($state.TargetReleaseVersionInfo)" -ForegroundColor DarkGray
+            Write-Host "      ProductVersion           = $($state.ProductVersion)" -ForegroundColor DarkGray
+            Write-Host "      Expected target          = $($state.ExpectedTargetReleaseVersionInfo)" -ForegroundColor DarkGray
+        }
+        else {
+            Write-Host "NOT CONFIGURED ⚠️" -ForegroundColor Yellow
+            Write-Host "  Windows Update may offer Windows 11 if your hardware is compatible." -ForegroundColor DarkGray
+        }
         Write-Host ""
         Write-Host "  Do you want to BLOCK Windows 11 upgrade? (Y/N)" -ForegroundColor Gray
         $confirm = Read-Host "  Choice"
@@ -522,8 +596,17 @@ function Toggle-Win11Block {
 # ─────────────────────────────────────────────
 $menuLoop = $true
 while ($menuLoop) {
-    # Build the Win11 block status indicator for the menu
-    $win11Status = if (Get-Win11BlockStatus) { '🟢 Blocked' } else { '🔴 Not blocked' }
+    $win11State = Get-Win11BlockState
+    $win11Status = switch ($win11State.StatusLabel) {
+        'Policy active' { '🟢 Policy active' }
+        'Policy mismatch' { '🟡 Policy mismatch' }
+        default { '🔴 Not configured' }
+    }
+    $win11StatusColor = switch ($win11State.StatusLabel) {
+        'Policy active' { 'Green' }
+        'Policy mismatch' { 'Yellow' }
+        default { 'Yellow' }
+    }
 
     Write-Host ""
     Write-Host "  ==========================================" -ForegroundColor Cyan
@@ -548,7 +631,7 @@ while ($menuLoop) {
     Write-Host "         Remove leftover .old_* folders" -ForegroundColor DarkGray
     Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
     Write-Host "  [7]  Block Windows 11 Upgrade  " -ForegroundColor Cyan -NoNewline
-    Write-Host "[$win11Status]" -ForegroundColor $(if (Get-Win11BlockStatus) { 'Green' } else { 'Yellow' })
+    Write-Host "[$win11Status]" -ForegroundColor $win11StatusColor
     Write-Host "         Pin this PC to Windows 10 via Group Policy" -ForegroundColor DarkGray
     Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
     Write-Host "  [ESC] Back to main menu" -ForegroundColor DarkGray

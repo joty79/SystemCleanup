@@ -117,3 +117,11 @@
 - Guardrail/rule: New option `[7]` in `ManageUpdates.ps1` toggles `TargetReleaseVersion` / `TargetReleaseVersionInfo` / `ProductVersion` under `HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate`. Auto-detects current Win10 build. Shows live status indicator on menu (blocked/not blocked). Warns if already on Windows 11. Runs `gpupdate /force` after changes. On unblock, cleans up the registry key entirely if empty.
 - Files affected: `ManageUpdates.ps1`, `PROJECT_RULES.md`.
 - Validation/tests run: Static review of registry operations and toggle logic; OS build detection via `OSVersion.Version.Build`.
+
+### Entry - 2026-03-10 (Fix false-positive Win11 block status in ManageUpdates)
+- Date: 2026-03-10
+- Problem: Option `[7] Block Windows 11 Upgrade` could show `Blocked` in the menu even when the effective policy was not correctly configured.
+- Root cause: The script used `Set-ItemProperty -Type`, which is invalid in PowerShell 7, and the status check only validated a partial subset of the required policy values.
+- Guardrail/rule: For this repo, machine-policy writes in `ManageUpdates.ps1` must use a PowerShell 7-compatible write path with immediate readback verification. The Win11 block status must require all three policy values (`TargetReleaseVersion=1`, `ProductVersion=Windows 10`, `TargetReleaseVersionInfo=22H2`) before the menu reports the policy as active.
+- Files affected: `ManageUpdates.ps1`, `PROJECT_RULES.md`.
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of write/remove verification and menu status flow.
