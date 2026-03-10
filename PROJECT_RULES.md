@@ -133,3 +133,11 @@
 - Guardrail/rule: In this repo, `Reset-UpdateCache` must wait for core service stop/start transitions, attempt to quiet `UsoSvc`/`DoSvc`, move cache folders with explicit verification, and report partial reset instead of false success when `SoftwareDistribution` or `catroot2` was not fully reset.
 - Files affected: `ManageUpdates.ps1`, `PROJECT_RULES.md`.
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of service wait/move verification logic.
+
+### Entry - 2026-03-10 (Document user-facing behavior changes in README + CHANGELOG)
+- Date: 2026-03-10
+- Problem: Documentation updates were being handled ad hoc after user-facing fixes, so troubleshooting/status changes could remain only in code and chat context.
+- Root cause: The repo had no explicit documentation review rule tied to behavior changes.
+- Guardrail/rule: After every user-facing behavior change or troubleshooting-relevant fix, explicitly review whether `README.md` needs an update. Record notable shipped changes in `CHANGELOG.md` even when the README does not need to change.
+- Files affected: `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`.
+- Validation/tests run: Static review of README troubleshooting/status sections and changelog entry coverage.
