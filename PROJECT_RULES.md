@@ -125,3 +125,11 @@
 - Guardrail/rule: For this repo, machine-policy writes in `ManageUpdates.ps1` must use a PowerShell 7-compatible write path with immediate readback verification. The Win11 block status must require all three policy values (`TargetReleaseVersion=1`, `ProductVersion=Windows 10`, `TargetReleaseVersionInfo=22H2`) before the menu reports the policy as active.
 - Files affected: `ManageUpdates.ps1`, `PROJECT_RULES.md`.
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of write/remove verification and menu status flow.
+
+### Entry - 2026-03-10 (Harden Reset-UpdateCache against partial success)
+- Date: 2026-03-10
+- Problem: `Reset-UpdateCache` could appear to succeed even when the Windows Update cache was only partially reset, leading to inconsistent hide/reset behavior across repeated attempts.
+- Root cause: The script used blind `net stop` calls without waiting for service state transitions, used weak rename verification, and always printed a success-style completion path after restarting services.
+- Guardrail/rule: In this repo, `Reset-UpdateCache` must wait for core service stop/start transitions, attempt to quiet `UsoSvc`/`DoSvc`, move cache folders with explicit verification, and report partial reset instead of false success when `SoftwareDistribution` or `catroot2` was not fully reset.
+- Files affected: `ManageUpdates.ps1`, `PROJECT_RULES.md`.
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of service wait/move verification logic.

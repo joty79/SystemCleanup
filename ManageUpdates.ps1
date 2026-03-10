@@ -301,6 +301,143 @@ function Remove-StaleOldFolders {
     return $removedCount
 }
 
+function Wait-ServiceState {
+    param(
+        [string]$Name,
+        [ValidateSet('Stopped', 'Running')]
+        [string]$DesiredStatus,
+        [int]$TimeoutSeconds = 15
+    )
+
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($null -eq $svc) { return $false }
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        $svc.Refresh()
+        if ($svc.Status.ToString() -eq $DesiredStatus) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    $svc.Refresh()
+    return ($svc.Status.ToString() -eq $DesiredStatus)
+}
+
+function Stop-UpdateServices {
+    param(
+        [string[]]$ServiceNames,
+        [switch]$Optional
+    )
+
+    $allStopped = $true
+    foreach ($svcName in $ServiceNames) {
+        $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+        if ($null -eq $svc) { continue }
+
+        if ($svc.Status -eq 'Stopped') {
+            Write-Host "  • $svcName already stopped." -ForegroundColor DarkGray
+            continue
+        }
+
+        Write-Host "  • Stopping $svcName..." -ForegroundColor Gray
+        try {
+            Stop-Service -Name $svcName -Force -ErrorAction Stop
+        }
+        catch {
+            net stop $svcName > $null 2>&1
+        }
+
+        if (Wait-ServiceState -Name $svcName -DesiredStatus 'Stopped' -TimeoutSeconds 15) {
+            Write-Host "    ✅ $svcName stopped." -ForegroundColor Green
+        }
+        else {
+            if ($Optional) {
+                Write-Host "    ⚠️ $svcName did not fully stop (continuing)." -ForegroundColor Yellow
+            }
+            else {
+                Write-Host "    ⚠️ $svcName did not fully stop." -ForegroundColor Red
+                $allStopped = $false
+            }
+        }
+    }
+
+    return $allStopped
+}
+
+function Start-UpdateServices {
+    param([string[]]$ServiceNames)
+
+    foreach ($svcName in $ServiceNames) {
+        $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+        if ($null -eq $svc) { continue }
+
+        if ($svc.Status -eq 'Running') {
+            Write-Host "  • $svcName already running." -ForegroundColor DarkGray
+            continue
+        }
+
+        Write-Host "  • Starting $svcName..." -ForegroundColor Gray
+        try {
+            Start-Service -Name $svcName -ErrorAction Stop
+        }
+        catch {
+            net start $svcName > $null 2>&1
+        }
+
+        if (Wait-ServiceState -Name $svcName -DesiredStatus 'Running' -TimeoutSeconds 15) {
+            Write-Host "    ✅ $svcName running." -ForegroundColor Green
+        }
+        else {
+            Write-Host "    ⚠️ $svcName did not report Running yet." -ForegroundColor Yellow
+        }
+    }
+}
+
+function Move-UpdateCacheFolder {
+    param(
+        [string]$Path,
+        [string]$Timestamp
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return [pscustomobject]@{
+            Path = $Path
+            BackupPath = ''
+            Success = $true
+            Skipped = $true
+            Message = 'Path not found; nothing to move.'
+        }
+    }
+
+    $parentPath = Split-Path -Path $Path -Parent
+    $leafName = Split-Path -Path $Path -Leaf
+    $backupPath = Join-Path $parentPath ("{0}.old_{1}" -f $leafName, $Timestamp)
+
+    try {
+        Move-Item -LiteralPath $Path -Destination $backupPath -Force -ErrorAction Stop
+    }
+    catch {
+        return [pscustomobject]@{
+            Path = $Path
+            BackupPath = $backupPath
+            Success = $false
+            Skipped = $false
+            Message = $_.Exception.Message
+        }
+    }
+
+    $moved = (-not (Test-Path -LiteralPath $Path)) -and (Test-Path -LiteralPath $backupPath)
+    return [pscustomobject]@{
+        Path = $Path
+        BackupPath = $backupPath
+        Success = $moved
+        Skipped = $false
+        Message = if ($moved) { 'Moved and verified.' } else { 'Move command returned without a verified folder transition.' }
+    }
+}
+
 # ─────────────────────────────────────────────
 # 🔵 ACTION: Reset Windows Update Cache
 # ─────────────────────────────────────────────
@@ -309,7 +446,7 @@ function Reset-UpdateCache {
     Write-Host "  $('─' * 40)" -ForegroundColor DarkGray
     
     Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
-    Write-Host "      • Stop update services (wuauserv, cryptSvc, bits, msiserver)" -ForegroundColor Gray
+    Write-Host "      • Stop core update services and try to quiet update orchestrators" -ForegroundColor Gray
     Write-Host "      • Delete any existing .old backup folders first" -ForegroundColor Gray
     Write-Host "      • Rename SoftwareDistribution and catroot2 folders" -ForegroundColor Gray
     Write-Host "      • Restart services" -ForegroundColor Gray
@@ -323,13 +460,13 @@ function Reset-UpdateCache {
         return
     }
     
-    $services = @('wuauserv', 'cryptSvc', 'bits', 'msiserver')
+    $optionalStopServices = @('UsoSvc', 'DoSvc')
+    $coreServices = @('wuauserv', 'cryptSvc', 'bits', 'msiserver')
     
     Write-Host "`n  Stopping services..." -ForegroundColor Yellow
-    foreach ($svc in $services) {
-        net stop $svc > $null 2>&1
-    }
-    
+    $null = Stop-UpdateServices -ServiceNames $optionalStopServices -Optional
+    $coreStopped = Stop-UpdateServices -ServiceNames $coreServices
+
     # Clean up any previous .old backup folders before creating new ones
     Write-Host "`n  Cleaning stale .old backup folders..." -ForegroundColor Yellow
     $cleaned = Remove-StaleOldFolders -Silent
@@ -344,25 +481,51 @@ function Reset-UpdateCache {
     $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
     
     Write-Host "`n  Renaming SoftwareDistribution..." -ForegroundColor Yellow
-    if (Test-Path $sdPath) {
-        Rename-Item $sdPath "${sdPath}.old_${ts}" -ErrorAction SilentlyContinue
-        if ($?) { Write-Host "  ✅ SoftwareDistribution renamed." -ForegroundColor Green }
-        else    { Write-Host "  ⚠️ Could not rename SoftwareDistribution." -ForegroundColor Red }
+    $sdMove = Move-UpdateCacheFolder -Path $sdPath -Timestamp $ts
+    if ($sdMove.Skipped) {
+        Write-Host "  ℹ️ SoftwareDistribution not found." -ForegroundColor DarkGray
+    }
+    elseif ($sdMove.Success) {
+        Write-Host "  ✅ SoftwareDistribution moved to $($sdMove.BackupPath)." -ForegroundColor Green
+    }
+    else {
+        Write-Host "  ⚠️ Could not move SoftwareDistribution: $($sdMove.Message)" -ForegroundColor Red
     }
     
     Write-Host "  Renaming catroot2..." -ForegroundColor Yellow
-    if (Test-Path $crPath) {
-        Rename-Item $crPath "${crPath}.old_${ts}" -ErrorAction SilentlyContinue
-        if ($?) { Write-Host "  ✅ catroot2 renamed." -ForegroundColor Green }
-        else    { Write-Host "  ⚠️ Could not rename catroot2." -ForegroundColor Red }
+    $crMove = Move-UpdateCacheFolder -Path $crPath -Timestamp $ts
+    if ($crMove.Skipped) {
+        Write-Host "  ℹ️ catroot2 not found." -ForegroundColor DarkGray
+    }
+    elseif ($crMove.Success) {
+        Write-Host "  ✅ catroot2 moved to $($crMove.BackupPath)." -ForegroundColor Green
+    }
+    else {
+        Write-Host "  ⚠️ Could not move catroot2: $($crMove.Message)" -ForegroundColor Red
     }
     
     Write-Host "`n  Starting services..." -ForegroundColor Yellow
-    foreach ($svc in $services) {
-        net start $svc > $null 2>&1
+    Start-UpdateServices -ServiceNames $coreServices
+
+    $resetSucceeded = $coreStopped -and $sdMove.Success -and $crMove.Success
+    Write-Host ""
+    if ($resetSucceeded) {
+        Write-Host "  ✅ Windows Update cache reset complete!" -ForegroundColor Green
+        Write-Host "     Fresh cache folders may be recreated immediately after services restart." -ForegroundColor DarkGray
     }
-    
-    Write-Host "`n  ✅ Windows Update cache reset complete!" -ForegroundColor Green
+    else {
+        Write-Host "  ⚠️ Windows Update cache reset was partial." -ForegroundColor Yellow
+        if (-not $coreStopped) {
+            Write-Host "     One or more core services did not stop cleanly before the move step." -ForegroundColor DarkGray
+        }
+        if (-not $sdMove.Success) {
+            Write-Host "     SoftwareDistribution was not fully reset." -ForegroundColor DarkGray
+        }
+        if (-not $crMove.Success) {
+            Write-Host "     catroot2 was not fully reset." -ForegroundColor DarkGray
+        }
+        Write-Host "     Reboot and run the reset again if Windows Update still behaves inconsistently." -ForegroundColor DarkGray
+    }
     Write-Host ""
     Write-Host "  ╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
     Write-Host "  ║  💡  NEXT STEPS:                                         ║" -ForegroundColor Cyan
