@@ -197,3 +197,11 @@
 - Guardrail/rule: In the main menu, prefer describing what an action does over giving fixed time estimates unless the timing is genuinely stable. For `[1] Full Cleanup`, keep the gray line as a task summary, not a duration promise.
 - Files affected: `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: Static review of main-menu text and README wording.
+
+### Entry - 2026-03-12 (Use reg.exe for isolated cleanmgr slot writes)
+- Date: 2026-03-12
+- Problem: Running `Windows Update Cleanup (Disk Cleanup Utility)` could fail immediately with `Argument types do not match` before `cleanmgr` even started.
+- Root cause: The isolated `StateFlags0088` setup/restore path used the PowerShell registry provider in a way that proved brittle for this `VolumeCaches` workflow and produced poor error behavior.
+- Guardrail/rule: For the isolated `cleanmgr /sagerun:88` slot in this repo, use `reg.exe add/delete` for `VolumeCaches` state-flag writes and restores instead of the PowerShell registry provider. If the process is not elevated, surface the access failure directly instead of masking it behind a binder-style exception.
+- Files affected: `ManageUpdates.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; dry-run helper invocation showed clear `Access is denied` in a non-elevated shell instead of the previous binder exception.

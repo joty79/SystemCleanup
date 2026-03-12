@@ -28,4 +28,5 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Fixed the main-menu ANSI palette so option `[4]` uses explicit magenta and option `[5]` uses blue instead of both rendering as default white.
 - Changed the main `SystemCleanup.cmd` launcher to show `[ESC] Close / Cancel` and read the actual Escape key via `ManageUpdates.ps1`, instead of showing `[X]` with `set /p`.
 - Replaced the misleading `Takes 20-40 minutes` text under main-menu option `[1] Full Cleanup` with a plain description of what the action actually runs.
+- Reworked the isolated `cleanmgr /sagerun:88` slot handling to use `reg.exe` instead of the PowerShell registry provider, avoiding the earlier `Argument types do not match` failure path and surfacing clear access errors when the process is not elevated.
 

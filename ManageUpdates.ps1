@@ -43,6 +43,31 @@ function Format-CleanMgrSlotValueName {
     return ('StateFlags{0:D4}' -f $Slot)
 }
 
+function Invoke-RegCommand {
+    param(
+        [string[]]$Arguments,
+        [switch]$AllowNonZeroExit
+    )
+
+    $output = (& reg.exe @Arguments 2>&1 | Out-String).Trim()
+    $exitCode = $LASTEXITCODE
+
+    if (-not $AllowNonZeroExit -and $exitCode -ne 0) {
+        $message = if ([string]::IsNullOrWhiteSpace($output)) {
+            "reg.exe failed with exit code $exitCode."
+        }
+        else {
+            $output
+        }
+        throw $message
+    }
+
+    return [pscustomobject]@{
+        ExitCode = $exitCode
+        Output = $output
+    }
+}
+
 function Get-LiveDownloadCacheStatusLine {
     $downloadPath = 'C:\Windows\SoftwareDistribution\Download'
     if (-not (Test-Path -LiteralPath $downloadPath)) {
@@ -495,7 +520,7 @@ function Set-IsolatedUpdateCleanupSlot {
     param([int]$Slot = 88)
 
     $volumeCachesRoot = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches'
-    $targetKey = Join-Path $volumeCachesRoot 'Update Cleanup'
+    $targetKey = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Update Cleanup'
     $valueName = Format-CleanMgrSlotValueName -Slot $Slot
     $snapshot = New-Object System.Collections.Generic.List[object]
 
@@ -503,19 +528,19 @@ function Set-IsolatedUpdateCleanupSlot {
         $existing = Get-ItemProperty -LiteralPath $subKey.PSPath -Name $valueName -ErrorAction SilentlyContinue
         $hasValue = $null -ne $existing -and $null -ne $existing.$valueName
         $snapshot.Add([pscustomobject]@{
-                Path = $subKey.PSPath
+                Path = $subKey.Name
                 HasValue = $hasValue
                 Value = if ($hasValue) { [int]$existing.$valueName } else { $null }
             })
 
-        Remove-ItemProperty -LiteralPath $subKey.PSPath -Name $valueName -ErrorAction SilentlyContinue
+        [void](Invoke-RegCommand -Arguments @('delete', $subKey.Name, '/v', $valueName, '/f') -AllowNonZeroExit)
     }
 
-    New-ItemProperty -LiteralPath $targetKey -Name $valueName -PropertyType DWord -Value 2 -Force | Out-Null
+    [void](Invoke-RegCommand -Arguments @('add', $targetKey, '/v', $valueName, '/t', 'REG_DWORD', '/d', '2', '/f'))
 
     return [pscustomobject]@{
         ValueName = $valueName
-        Snapshot = @($snapshot)
+        Snapshot = $snapshot.ToArray()
     }
 }
 
@@ -527,9 +552,9 @@ function Restore-IsolatedUpdateCleanupSlot {
     }
 
     foreach ($entry in @($State.Snapshot)) {
-        Remove-ItemProperty -LiteralPath $entry.Path -Name $State.ValueName -ErrorAction SilentlyContinue
+        [void](Invoke-RegCommand -Arguments @('delete', $entry.Path, '/v', $State.ValueName, '/f') -AllowNonZeroExit)
         if ($entry.HasValue) {
-            New-ItemProperty -LiteralPath $entry.Path -Name $State.ValueName -PropertyType DWord -Value ([int]$entry.Value) -Force | Out-Null
+            [void](Invoke-RegCommand -Arguments @('add', $entry.Path, '/v', $State.ValueName, '/t', 'REG_DWORD', '/d', ([string][int]$entry.Value), '/f'))
         }
     }
 }
