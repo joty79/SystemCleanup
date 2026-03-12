@@ -16,7 +16,7 @@ if (-not (Test-Path $winsxsTemp)) {
 
 # Check if Temp has any contents
 $tempContents = Get-ChildItem -LiteralPath $winsxsTemp -Force -ErrorAction SilentlyContinue
-if (-not $tempContents -or $tempContents.Count -eq 0) {
+if (@($tempContents).Count -eq 0) {
     Write-Host "`n  WinSxS\Temp is empty — Already clean!" -ForegroundColor Green
     if (-not $SilentCaller) { Read-Host "`nPress Enter to close" }
     return
@@ -45,7 +45,7 @@ Start-Service wuauserv -ErrorAction SilentlyContinue
 
 # Check if everything was deleted
 $remainingCheck = Get-ChildItem -LiteralPath $winsxsTemp -Force -ErrorAction SilentlyContinue
-if (-not $remainingCheck -or $remainingCheck.Count -eq 0) {
+if (@($remainingCheck).Count -eq 0) {
     Write-Host "  WinSxS\Temp cleaned completely!" -ForegroundColor Green
     if (-not $SilentCaller) { Read-Host "`nPress Enter to close" }
     return

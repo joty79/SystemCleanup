@@ -34,4 +34,6 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Added a new `SystemCleanup.ps1` main launcher on the `wt` branch and switched the installer / `.reg` command path to `pwsh.exe -File SystemCleanup.ps1`, removing `cmd.exe` from the primary interactive launch path.
 - Removed the stale `.gitignore` entry that used to hide `SystemCleanup.ps1`, so the new PowerShell launcher can actually be tracked on the `wt` branch.
 - Updated the `wt` launcher logging path so it prefers `D:\Temp\SystemCleanup` but automatically falls back to a writable local path when a machine only has `C:` or the `D:` drive is not ready.
+- Updated the `wt` launcher so `Full Cleanup` runs the `SFC` and `DISM` stages through `cmd.exe`, preserving the normal native progress display inside Windows Terminal.
+- Fixed `CleanInFlight.ps1` so its empty-folder checks are array-safe under strict PowerShell execution and no longer crash on single-item results with `The property 'Count' cannot be found on this object`.
 

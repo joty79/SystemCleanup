@@ -237,3 +237,11 @@
 - Guardrail/rule: On the `wt` branch, `SystemCleanup.ps1` should prefer `D:\Temp\SystemCleanup` for logs but must automatically fall back to a writable local path such as `%LOCALAPPDATA%\SystemCleanupContext\logs` or `%TEMP%\SystemCleanup`. Logging failures must never abort the cleanup flow.
 - Files affected: `SystemCleanup.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of fallback path selection and no-throw log writes.
+
+### Entry - 2026-03-12 (wt branch: keep native SFC/DISM progress + strict-safe CleanInFlight)
+- Date: 2026-03-12
+- Problem: In the experimental PowerShell/Windows Terminal launcher, `Full Cleanup` lost the familiar native `SFC` / `DISM` progress display, and `CleanInFlight.ps1` could crash with `The property 'Count' cannot be found on this object`.
+- Root cause: Native servicing tools were being launched directly from the PowerShell host, while `CleanInFlight.ps1` still used `.Count` on values that may be a single object under strict execution.
+- Guardrail/rule: On the `wt` branch, keep the main menu in `SystemCleanup.ps1`, but run `SFC` and `DISM` stages through `cmd.exe` so the classic progress rendering survives inside Windows Terminal. Also keep `CleanInFlight.ps1` array-safe by using `@(...).Count` for empty-folder checks.
+- Files affected: `SystemCleanup.ps1`, `CleanInFlight.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and `CleanInFlight.ps1`; static review of `cmd.exe` native-stage invocation.

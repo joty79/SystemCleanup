@@ -60,7 +60,7 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 
 Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. After any option completes, the tool **returns to the main menu** — only `ESC` exits the CMD launcher.
 
-On the experimental `wt` branch, the main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing.
+On the experimental `wt` branch, the main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing. To preserve the familiar native `% progress` display, the `Full Cleanup` branch runs the `SFC` and `DISM` stages through `cmd.exe` even though the main menu is hosted by PowerShell.
 
 ### Usage
 

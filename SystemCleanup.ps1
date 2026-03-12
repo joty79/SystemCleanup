@@ -185,6 +185,33 @@ function Invoke-NativeStep {
     return $exitCode
 }
 
+function Invoke-CmdNativeStep {
+    param(
+        [string]$Title,
+        [string]$CommandLine
+    )
+
+    Write-Host ''
+    Write-Host ("=== {0} ===" -f $Title) -ForegroundColor Cyan
+    Write-Host ''
+    Write-Log -Level 'INFO' -Message ("STARTING: {0}" -f $Title)
+
+    & cmd.exe /d /c $CommandLine
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -eq 0) {
+        Write-Host ''
+        Write-Host '  +++   OK: Step completed.' -ForegroundColor Green
+        Write-Log -Level 'INFO' -Message ("SUCCESS: {0}" -f $Title)
+        return 0
+    }
+
+    Write-Host ''
+    Write-Host '  [X]   FAILED: Found issues but could NOT fix them!' -ForegroundColor Red
+    Write-Log -Level 'ERROR' -Message ("FAILED: {0} - Code: {1}" -f $Title, $exitCode)
+    return $exitCode
+}
+
 function Invoke-FullCleanup {
     Clear-Host
     Write-Host ''
@@ -201,17 +228,17 @@ function Invoke-FullCleanup {
     Write-Host ''
 
     Reset-TrustedInstaller
-    [void](Invoke-NativeStep -Title 'SFC (Initial Scan)' -FilePath 'sfc.exe' -ArgumentList @('/scannow'))
-    [void](Invoke-NativeStep -Title 'DISM AnalyzeComponentStore' -FilePath 'dism.exe' -ArgumentList @('/Online', '/Cleanup-Image', '/AnalyzeComponentStore'))
-    [void](Invoke-NativeStep -Title 'DISM RestoreHealth' -FilePath 'dism.exe' -ArgumentList @('/Online', '/Cleanup-Image', '/RestoreHealth'))
-    [void](Invoke-NativeStep -Title 'DISM StartComponentCleanup' -FilePath 'dism.exe' -ArgumentList @('/Online', '/Cleanup-Image', '/StartComponentCleanup'))
+    [void](Invoke-CmdNativeStep -Title 'SFC (Initial Scan)' -CommandLine 'sfc.exe /scannow')
+    [void](Invoke-CmdNativeStep -Title 'DISM AnalyzeComponentStore' -CommandLine 'dism.exe /Online /Cleanup-Image /AnalyzeComponentStore')
+    [void](Invoke-CmdNativeStep -Title 'DISM RestoreHealth' -CommandLine 'dism.exe /Online /Cleanup-Image /RestoreHealth')
+    [void](Invoke-CmdNativeStep -Title 'DISM StartComponentCleanup' -CommandLine 'dism.exe /Online /Cleanup-Image /StartComponentCleanup')
 
     Write-Host ''
     Write-Host '=== Cleaning WinSxS Temp ===' -ForegroundColor Cyan
     & (Join-Path $PSScriptRoot 'CleanInFlight.ps1') -SilentCaller
 
     Reset-TrustedInstaller
-    [void](Invoke-NativeStep -Title 'SFC (Final Verification)' -FilePath 'sfc.exe' -ArgumentList @('/scannow'))
+    [void](Invoke-CmdNativeStep -Title 'SFC (Final Verification)' -CommandLine 'sfc.exe /scannow')
 
     Write-Host ''
     Write-Host '==========================================' -ForegroundColor Green
