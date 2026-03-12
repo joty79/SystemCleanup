@@ -689,8 +689,25 @@ function Invoke-IsolatedWindowsUpdateCleanup {
         $slotState = Set-IsolatedUpdateCleanupSlot -Slot $Slot
         Write-StructuredDebugBlock -Path $DebugLogPath -Title 'StateFlags after isolate' -Rows (Get-VolumeCachesSlotSnapshot -Slot $Slot)
 
-        $process = Start-Process -FilePath $cleanMgrPath -ArgumentList "/sagerun:$Slot" -WindowStyle Hidden -PassThru
-        Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Started cleanmgr PID=$($process.Id)"
+        $launchMode = 'DirectHidden'
+        if (-not [string]::IsNullOrWhiteSpace($env:WT_SESSION)) {
+            $launchMode = 'ExternalCmd'
+            $cmdExe = if (-not [string]::IsNullOrWhiteSpace($env:ComSpec)) { $env:ComSpec } else { (Join-Path $env:SystemRoot 'System32\cmd.exe') }
+            $cmdArgs = @('/d', '/c', "`"$cleanMgrPath`" /sagerun:$Slot")
+            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message ("Launching cleanmgr via external cmd window: {0} {1}" -f $cmdExe, ($cmdArgs -join ' '))
+            $process = Start-Process -FilePath $cmdExe -ArgumentList $cmdArgs -PassThru -Wait -Environment @{
+                WT_SESSION = ''
+                WT_PROFILE_ID = ''
+                WT_PANE = ''
+                WT_TAB_ID = ''
+            }
+        }
+        else {
+            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Launching cleanmgr directly in non-WT session."
+            $process = Start-Process -FilePath $cleanMgrPath -ArgumentList "/sagerun:$Slot" -WindowStyle Hidden -PassThru
+        }
+
+        Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Started cleanmgr PID=$($process.Id) Mode=$launchMode"
 
         $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
         $nextHeartbeatSeconds = 5
@@ -949,6 +966,9 @@ function Invoke-WindowsUpdateCleanup {
     }
 
     Write-Host "`n  Running cleanmgr /sagerun:$slot ..." -ForegroundColor Yellow
+    if (-not [string]::IsNullOrWhiteSpace($env:WT_SESSION)) {
+        Write-Host "  Launch mode: external classic cmd window (WT-safe fallback)" -ForegroundColor DarkGray
+    }
     try {
         $runResult = Invoke-IsolatedWindowsUpdateCleanup -Slot $slot -DebugLogPath $debugLogPath
     }

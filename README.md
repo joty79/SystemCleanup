@@ -165,6 +165,7 @@ cleanmgr /sagerun:88
 - May also scavenge `C:\Windows\WinSxS\Temp\PendingDeletes`
 - Before and after the run, the tool shows `Reclaimable packages`, `Backups and Disabled Features`, and `Cleanup recommended`
 - Writes a dedicated debug log under `%LOCALAPPDATA%\SystemCleanupContext\logs` so machine-specific `cleanmgr` / slot issues can be diagnosed without enabling verbose logging for the whole tool
+- When launched from the experimental `wt` branch inside Windows Terminal, it uses an external classic `cmd` window for `cleanmgr` instead of waiting inline in the WT-hosted PowerShell session
 
 **Best used:** after Windows Updates are installed and the PC has rebooted.
 

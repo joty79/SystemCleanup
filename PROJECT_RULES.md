@@ -285,3 +285,11 @@
 - Guardrail/rule: Keep troubleshooting output for option `[4]` in a dedicated debug log under `%LOCALAPPDATA%\SystemCleanupContext\logs`. Record `StateFlags` snapshots before/after isolate and restore, `cleanmgr` process snapshots, and periodic heartbeats while waiting, instead of turning on verbose logging globally.
 - Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of debug-log path, slot snapshots, and heartbeat logging.
+
+### Entry - 2026-03-13 (WT-safe launch mode for Windows Update Cleanup)
+- Date: 2026-03-13
+- Problem: Debug logs showed that option `[4]` isolated the `Update Cleanup` slot correctly, but `cleanmgr` could still hang/focus-stall when it was launched and waited inline from a WT-hosted session.
+- Root cause: The issue was not the `StateFlags0088` isolation; it was the `cleanmgr` GUI/process lifecycle under `WT_SESSION`, especially on first run on some machines.
+- Guardrail/rule: For option `[4]`, when `WT_SESSION` is present, launch `cleanmgr /sagerun:88` via an external classic `cmd` window and clear WT-specific environment variables for that child process. Keep the existing direct path only for non-WT sessions.
+- Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of WT-session detection and external `cmd` launch path.
