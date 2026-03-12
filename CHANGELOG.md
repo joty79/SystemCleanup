@@ -27,4 +27,5 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Replaced the main-menu live cache size one-liner with a dedicated `ManageUpdates.ps1 -Action LiveCleanupStatus` call so CMD no longer breaks on inline PowerShell quoting or string-token parsing.
 - Fixed the main-menu ANSI palette so option `[4]` uses explicit magenta and option `[5]` uses blue instead of both rendering as default white.
 - Changed the main `SystemCleanup.cmd` launcher to show `[ESC] Close / Cancel` and read the actual Escape key via `ManageUpdates.ps1`, instead of showing `[X]` with `set /p`.
+- Replaced the misleading `Takes 20-40 minutes` text under main-menu option `[1] Full Cleanup` with a plain description of what the action actually runs.
 

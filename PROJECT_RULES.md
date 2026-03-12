@@ -189,3 +189,11 @@
 - Guardrail/rule: The main CMD menu should advertise `[ESC] Close / Cancel` and read the actual Escape key through a PowerShell `ReadKey` action, keeping the launcher behavior aligned with the PowerShell submenu navigation.
 - Files affected: `SystemCleanup.cmd`, `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of main-menu key handling.
+
+### Entry - 2026-03-12 (Avoid hardcoded duration promises in main menu)
+- Date: 2026-03-12
+- Problem: Main-menu option `[1] Full Cleanup` still said `Takes 20-40 minutes`, which is misleading on many systems and looked inconsistent next to the description-style text used by the other menu items.
+- Root cause: The original launcher menu used a rough duration estimate instead of describing the action.
+- Guardrail/rule: In the main menu, prefer describing what an action does over giving fixed time estimates unless the timing is genuinely stable. For `[1] Full Cleanup`, keep the gray line as a task summary, not a duration promise.
+- Files affected: `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: Static review of main-menu text and README wording.

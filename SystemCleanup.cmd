@@ -65,7 +65,7 @@ echo.
 echo  %cWhite%  Choose an option:%cReset%
 echo.
 echo    %cGreen%[ 1 ]%cReset% Full Cleanup (SFC + DISM + InFlight)
-echo          %cGray%Takes 20-40 minutes%cReset%
+echo          %cGray%Run SFC, DISM, and WinSxS Temp cleanup%cReset%
 echo.
 echo    %cYellow%[ 2 ]%cReset% InFlight Cleanup Only (MoveFileEx)
 echo          %cGray%Quick — schedules locked files for deletion on reboot%cReset%

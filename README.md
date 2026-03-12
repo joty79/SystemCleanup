@@ -70,7 +70,7 @@ Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`
 SystemCleanup.cmd
 ```
 
-⏱ Takes approximately 20–40 minutes depending on system state.
+Includes SFC, DISM, and WinSxS Temp cleanup with logging in one run. Actual duration varies a lot by system state.
 
 ---
 
