@@ -1,8 +1,12 @@
-# ManageUpdates.ps1 — Windows Update Manager (Native COM API)
-# Called by SystemCleanup.cmd Option 3
-# Zero external dependencies — uses built-in Microsoft.Update.Session COM
+# ManageUpdates.ps1 — Windows Update Manager + Update Cleanup Actions
+# Called by SystemCleanup.cmd main menu and submenu actions
+# Zero external dependencies — uses built-in Microsoft.Update.Session COM and Windows cleanup tools
 
-param([switch]$SilentCaller)
+param(
+    [switch]$SilentCaller,
+    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup')]
+    [string]$Action = 'Menu'
+)
 
 # 🔸 Force UTF-8 Encoding
 $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -32,6 +36,11 @@ function Read-MenuKey {
 function Wait-ReturnToMenu {
     Write-Host "`n  Press any key to return to menu..." -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+}
+
+function Format-CleanMgrSlotValueName {
+    param([int]$Slot)
+    return ('StateFlags{0:D4}' -f $Slot)
 }
 
 # ─────────────────────────────────────────────
@@ -410,14 +419,131 @@ function Get-DirectorySizeMB {
     return [math]::Round(($sum / 1MB), 1)
 }
 
-function Get-LiveDownloadCacheStatusLine {
-    $downloadPath = 'C:\Windows\SoftwareDistribution\Download'
-    if (-not (Test-Path -LiteralPath $downloadPath)) {
-        return 'Download cache path not found'
+function Get-ComponentStoreCleanupInfo {
+    $result = [ordered]@{
+        BackupsAndDisabledFeatures = ''
+        ReclaimablePackages = ''
+        CleanupRecommended = ''
+        RawOutput = ''
+        Succeeded = $false
+        ErrorMessage = ''
     }
 
-    $sizeMB = Get-DirectorySizeMB -Path $downloadPath
-    return "Clean live Download cache files ($sizeMB MB)"
+    try {
+        $rawOutput = (& dism.exe /Online /Cleanup-Image /AnalyzeComponentStore 2>&1 | Out-String)
+        $result.RawOutput = $rawOutput.Trim()
+
+        foreach ($line in ($rawOutput -split "`r?`n")) {
+            if ($line -match 'Backups and Disabled Features\s*:\s*(.+)$') {
+                $result.BackupsAndDisabledFeatures = $Matches[1].Trim()
+                continue
+            }
+            if ($line -match 'Number of Reclaimable Packages\s*:\s*(.+)$') {
+                $result.ReclaimablePackages = $Matches[1].Trim()
+                continue
+            }
+            if ($line -match 'Component Store Cleanup Recommended\s*:\s*(.+)$') {
+                $result.CleanupRecommended = $Matches[1].Trim()
+            }
+        }
+
+        $result.Succeeded = -not [string]::IsNullOrWhiteSpace($result.BackupsAndDisabledFeatures)
+    }
+    catch {
+        $result.ErrorMessage = $_.Exception.Message
+    }
+
+    return [pscustomobject]$result
+}
+
+function Show-ComponentStoreCleanupInfo {
+    param(
+        [object]$Info,
+        [string]$Title
+    )
+
+    Write-Host "  $Title" -ForegroundColor Cyan
+    Write-Host "  $('─' * 40)" -ForegroundColor DarkGray
+
+    if (-not $Info -or -not $Info.Succeeded) {
+        $message = if ($Info -and -not [string]::IsNullOrWhiteSpace($Info.ErrorMessage)) {
+            $Info.ErrorMessage
+        }
+        else {
+            'Could not read DISM component store status.'
+        }
+        Write-Host "     $message" -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "     Reclaimable packages: $($Info.ReclaimablePackages)" -ForegroundColor Gray
+    Write-Host "     Backups and Disabled Features: $($Info.BackupsAndDisabledFeatures)" -ForegroundColor Gray
+    Write-Host "     Cleanup recommended: $($Info.CleanupRecommended)" -ForegroundColor Gray
+}
+
+function Set-IsolatedUpdateCleanupSlot {
+    param([int]$Slot = 88)
+
+    $volumeCachesRoot = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches'
+    $targetKey = Join-Path $volumeCachesRoot 'Update Cleanup'
+    $valueName = Format-CleanMgrSlotValueName -Slot $Slot
+    $snapshot = New-Object System.Collections.Generic.List[object]
+
+    foreach ($subKey in @(Get-ChildItem -LiteralPath $volumeCachesRoot -ErrorAction Stop)) {
+        $existing = Get-ItemProperty -LiteralPath $subKey.PSPath -Name $valueName -ErrorAction SilentlyContinue
+        $hasValue = $null -ne $existing -and $null -ne $existing.$valueName
+        $snapshot.Add([pscustomobject]@{
+                Path = $subKey.PSPath
+                HasValue = $hasValue
+                Value = if ($hasValue) { [int]$existing.$valueName } else { $null }
+            })
+
+        Remove-ItemProperty -LiteralPath $subKey.PSPath -Name $valueName -ErrorAction SilentlyContinue
+    }
+
+    New-ItemProperty -LiteralPath $targetKey -Name $valueName -PropertyType DWord -Value 2 -Force | Out-Null
+
+    return [pscustomobject]@{
+        ValueName = $valueName
+        Snapshot = @($snapshot)
+    }
+}
+
+function Restore-IsolatedUpdateCleanupSlot {
+    param([object]$State)
+
+    if (-not $State) {
+        return
+    }
+
+    foreach ($entry in @($State.Snapshot)) {
+        Remove-ItemProperty -LiteralPath $entry.Path -Name $State.ValueName -ErrorAction SilentlyContinue
+        if ($entry.HasValue) {
+            New-ItemProperty -LiteralPath $entry.Path -Name $State.ValueName -PropertyType DWord -Value ([int]$entry.Value) -Force | Out-Null
+        }
+    }
+}
+
+function Invoke-IsolatedWindowsUpdateCleanup {
+    param([int]$Slot = 88)
+
+    $cleanMgrPath = Join-Path $env:SystemRoot 'System32\cleanmgr.exe'
+    if (-not (Test-Path -LiteralPath $cleanMgrPath)) {
+        throw "cleanmgr.exe was not found at $cleanMgrPath"
+    }
+
+    $slotState = $null
+    try {
+        $slotState = Set-IsolatedUpdateCleanupSlot -Slot $Slot
+        $process = Start-Process -FilePath $cleanMgrPath -ArgumentList "/sagerun:$Slot" -WindowStyle Hidden -Wait -PassThru
+        return [pscustomobject]@{
+            ExitCode = $process.ExitCode
+            Slot = $Slot
+        }
+    }
+    finally {
+        Restore-IsolatedUpdateCleanupSlot -State $slotState
+    }
 }
 
 function Ensure-MoveFileExApi {
@@ -617,6 +743,57 @@ function Remove-LiveSoftwareDistributionDownload {
     }
 
     Write-Host "  ℹ️ Windows may recreate some files later after scans or new downloads." -ForegroundColor DarkGray
+}
+
+function Invoke-WindowsUpdateCleanup {
+    $slot = 88
+
+    Write-Host "`n  🔵 WINDOWS UPDATE CLEANUP (DISK CLEANUP UTILITY)" -ForegroundColor Cyan
+    Write-Host "  $('─' * 54)" -ForegroundColor DarkGray
+    Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
+    Write-Host "      • Run Disk Cleanup Utility: cleanmgr /sagerun:$slot" -ForegroundColor Gray
+    Write-Host "      • Clean superseded WinSxS / component store update leftovers" -ForegroundColor Gray
+    Write-Host "      • May also scavenge WinSxS\\Temp\\PendingDeletes leftovers" -ForegroundColor Gray
+    Write-Host "      • Leave live SoftwareDistribution alone" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  💡 Best used after Windows Updates are installed and the PC has rebooted." -ForegroundColor Cyan
+    Write-Host "     Use this for extra post-update disk cleanup, not for hide/reset troubleshooting." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $beforeInfo = Get-ComponentStoreCleanupInfo
+    Show-ComponentStoreCleanupInfo -Info $beforeInfo -Title 'Current component store status'
+    Write-Host ""
+
+    $confirm = Read-Host "  Proceed? (Y/N)"
+    if ($confirm -notmatch '^[Yy]') {
+        Write-Host "  Cancelled." -ForegroundColor DarkGray
+        return
+    }
+
+    Write-Host "`n  Running cleanmgr /sagerun:$slot ..." -ForegroundColor Yellow
+    try {
+        $runResult = Invoke-IsolatedWindowsUpdateCleanup -Slot $slot
+    }
+    catch {
+        Write-Host "  Failed to run Disk Cleanup Utility: $($_.Exception.Message)" -ForegroundColor Red
+        return
+    }
+
+    $afterInfo = Get-ComponentStoreCleanupInfo
+
+    Write-Host ""
+    if ($runResult.ExitCode -eq 0) {
+        Write-Host "  ✅ Windows Update Cleanup finished." -ForegroundColor Green
+    }
+    else {
+        Write-Host "  ⚠️ Windows Update Cleanup finished with exit code $($runResult.ExitCode)." -ForegroundColor Yellow
+    }
+    Write-Host "     Command: cleanmgr /sagerun:$slot" -ForegroundColor DarkGray
+    Write-Host ""
+
+    Show-ComponentStoreCleanupInfo -Info $beforeInfo -Title 'Before cleanup'
+    Write-Host ""
+    Show-ComponentStoreCleanupInfo -Info $afterInfo -Title 'After cleanup'
 }
 
 function Move-UpdateCacheFolder {
@@ -981,10 +1158,29 @@ function Toggle-Win11Block {
 # ─────────────────────────────────────────────
 # 🔵 MAIN MENU LOOP
 # ─────────────────────────────────────────────
+$directActionCompleted = $false
+switch ($Action) {
+    'LiveCleanup' {
+        Remove-LiveSoftwareDistributionDownload
+        $directActionCompleted = $true
+    }
+    'WindowsUpdateCleanup' {
+        Invoke-WindowsUpdateCleanup
+        $directActionCompleted = $true
+    }
+}
+
+if ($directActionCompleted) {
+    if (-not $SilentCaller) {
+        Wait-ReturnToMenu
+        Write-Host ""
+    }
+    return
+}
+
 $menuLoop = $true
 while ($menuLoop) {
     $win11State = Get-Win11BlockState
-    $liveDownloadCacheStatus = Get-LiveDownloadCacheStatusLine
     $win11Status = switch ($win11State.StatusLabel) {
         'Policy active' { '🟢 Policy active' }
         'Policy mismatch' { '🟡 Policy mismatch' }
@@ -1015,12 +1211,10 @@ while ($menuLoop) {
     Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
     Write-Host "  [5]  Reset Update Cache" -ForegroundColor Red
     Write-Host "         Reset SoftwareDistribution + catroot2" -ForegroundColor DarkGray
-    Write-Host "  [6]  Live SoftwareDistribution Cleanup" -ForegroundColor Yellow
-    Write-Host "         $liveDownloadCacheStatus" -ForegroundColor DarkGray
-    Write-Host "  [7]  Clean Stale Backup Folders" -ForegroundColor Magenta
+    Write-Host "  [6]  Clean Stale Backup Folders" -ForegroundColor Magenta
     Write-Host "         Remove leftover .old_* folders" -ForegroundColor DarkGray
     Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
-    Write-Host "  [8]  Block Windows 11 Upgrade  " -ForegroundColor Cyan -NoNewline
+    Write-Host "  [7]  Block Windows 11 Upgrade  " -ForegroundColor Cyan -NoNewline
     Write-Host "[$win11Status]" -ForegroundColor $win11StatusColor
     Write-Host "         Pin this PC to Windows 10 via Group Policy" -ForegroundColor DarkGray
     Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
@@ -1058,15 +1252,11 @@ while ($menuLoop) {
             Wait-ReturnToMenu
         }
         '6' {
-            Remove-LiveSoftwareDistributionDownload
-            Wait-ReturnToMenu
-        }
-        '7' {
             Write-Host ""
             Remove-StaleOldFolders
             Wait-ReturnToMenu
         }
-        '8' {
+        '7' {
             Toggle-Win11Block
             Wait-ReturnToMenu
         }

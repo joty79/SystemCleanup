@@ -149,3 +149,11 @@
 - Guardrail/rule: Keep `Reset Update Cache` as the troubleshooting/reset path, and expose live cleanup as a separate menu action. The live cleanup targets `C:\Windows\SoftwareDistribution\Download`, shows the current cache size both in the menu and before confirmation, stops update services temporarily, deletes what it can immediately, and only uses reboot-time deletion as a fallback for locked leftovers.
 - Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of menu numbering, live-cache target scope, and reboot-fallback behavior.
+
+### Entry - 2026-03-12 (Promote post-update cleanup actions to main menu)
+- Date: 2026-03-12
+- Problem: The new live `SoftwareDistribution` cleanup and the planned `Disk Cleanup Utility`-based Windows Update cleanup are post-update disk-recovery actions, not update-management/troubleshooting actions, so keeping them inside the Windows Update Manager submenu made the main workflow harder to follow.
+- Root cause: The menu structure was optimized around update-management grouping instead of the user's real post-update cleanup sequence.
+- Guardrail/rule: Keep post-update cleanup actions in the main `SystemCleanup.cmd` menu: `Live SoftwareDistribution Cleanup` as option `[3]` and `Windows Update Cleanup (Disk Cleanup Utility)` as option `[4]`. Keep `Windows Update Manager` focused on list/hide/unhide, reset cache, stale backup cleanup, and Win11 policy block. The `cleanmgr` action must run via an isolated dedicated slot (`cleanmgr /sagerun:88`) and show `AnalyzeComponentStore` status before and after execution instead of inventing a fake size estimate.
+- Files affected: `SystemCleanup.cmd`, `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of main-menu numbering, isolated `cleanmgr` slot handling, and updated documentation.

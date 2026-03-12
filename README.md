@@ -19,7 +19,9 @@
 |:-:|------|-------------|
 | 🔧 | **[Full Cleanup](#-full-cleanup)** | SFC → DISM → WinSxS Temp cleanup in a single automated flow |
 | ⚡ | **[InFlight Cleanup](#-inflight-cleanup)** | Quick-clean locked files from `WinSxS\Temp` using `MoveFileEx` |
-| 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, clean live SoftwareDistribution, block Win11 upgrade |
+| 💾 | **[Live SoftwareDistribution Cleanup](#-live-softwaredistribution-cleanup)** | Clean the live `SoftwareDistribution\Download` cache without resetting update history |
+| 🧹 | **[Windows Update Cleanup](#-windows-update-cleanup-disk-cleanup-utility)** | Run isolated `Disk Cleanup Utility` / `cleanmgr /sagerun:88` for WinSxS update leftovers |
+| 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, clean stale backups, block Win11 upgrade |
 | 📦 | **[Installer](#-installation)** | One-command setup with context menu registration and GitHub updates |
 
 ---
@@ -125,6 +127,46 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\CleanInFlight.ps1 -SilentCaller
 
 ---
 
+## 💾 Live SoftwareDistribution Cleanup
+
+> Fast post-update space recovery for the live `C:\Windows\SoftwareDistribution\Download` cache.
+
+- Main menu option `[3]`
+- The gray description line shows the current live `Download` cache size directly in the main menu
+- Before confirmation, it shows the current live `Download` cache size again so you can decide if it is worth running
+- It stops the update services temporarily and cleans only the live `Download` cache
+- It intentionally leaves `DataStore` / update history alone, so it is less disruptive than a full cache reset
+- If some files stay locked, the tool schedules those leftovers for deletion on the next reboot
+- Windows may recreate some files later after a new update scan or download — that is normal
+
+**Best used:** after monthly updates when you want to reclaim space from leftover update downloads.
+
+**From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 3*
+
+---
+
+## 🧹 Windows Update Cleanup (Disk Cleanup Utility)
+
+> Extra post-update cleanup for superseded WinSxS / component-store update leftovers using the built-in Disk Cleanup Utility.
+
+- Main menu option `[4]`
+- Runs an isolated `Disk Cleanup Utility` task:
+
+```cmd
+cleanmgr /sagerun:88
+```
+
+- Targets the same `Windows Update Cleanup` family as the Disk Cleanup GUI
+- Leaves the live `SoftwareDistribution` cache alone
+- May also scavenge `C:\Windows\WinSxS\Temp\PendingDeletes`
+- Before and after the run, the tool shows `Reclaimable packages`, `Backups and Disabled Features`, and `Cleanup recommended`
+
+**Best used:** after Windows Updates are installed and the PC has rebooted.
+
+**From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 4*
+
+---
+
 ## 🔄 Windows Update Manager
 
 > Hide unwanted Windows Updates, block Windows 11 upgrades, and reset the update cache — all using the native COM API, no external tools needed.
@@ -134,7 +176,6 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\CleanInFlight.ps1 -SilentCaller
 - Windows pushes updates that **fail repeatedly** or aren't relevant (e.g. fake WSL update on non-WSL systems)
 - The only built-in way to hide updates is the **`wushowhide.diagcab`** GUI tool — slow and manual
 - Hiding an update *before* clearing the cache doesn't stick — the flag gets wiped on next cache reset
-- The live `SoftwareDistribution\Download` cache can keep **hundreds of MB** of leftover update packages after monthly updates
 - Cache reset leaves behind **`.old` backup folders** that accumulate and waste disk space
 - Windows 10 machines get **nagged to upgrade to Windows 11** with no easy off switch
 
@@ -155,10 +196,9 @@ A full interactive submenu using the native `Microsoft.Update.Session` COM API �
 │  [4]  Unhide Update(s)      ← restore hidden             │
 │  ──────────────────────────────────────────               │
 │  [5]  Reset Update Cache    ← reset SoftwareDistribution  │
-│  [6]  Live SoftwareDistribution Cleanup                   │
-│  [7]  Clean Stale Backups   ← remove .old_* folders       │
+│  [6]  Clean Stale Backups   ← remove .old_* folders       │
 │  ──────────────────────────────────────────               │
-│  [8]  Block Windows 11      ← policy active/mismatch/off  │
+│  [7]  Block Windows 11      ← policy active/mismatch/off  │
 │  ──────────────────────────────────────────               │
 │  [ESC] Back to main menu                                 │
 └──────────────────────────────────────────────────────────┘
@@ -187,19 +227,9 @@ If you hide first then reset, the `IsHidden` flag is stored in `SoftwareDistribu
 - Fresh cache folders may be recreated immediately after services restart — that alone does **not** mean the reset failed
 - If the tool reports a partial reset, reboot and run `[5]` again before hiding updates
 
-### Live SoftwareDistribution Cleanup
-
-- Option `[6]` is the **space-recovery** path, not the hide/reset troubleshooting path
-- The menu itself shows the current live `Download` cache size next to option `[6]`
-- Before confirmation, it shows the current live `Download` cache size so you can decide whether the cleanup is worth running
-- It stops the update services temporarily and cleans the live `C:\Windows\SoftwareDistribution\Download` cache
-- It intentionally leaves `DataStore` / update history alone, so it is less disruptive than a full cache reset
-- If some files stay locked, the tool schedules those leftovers for deletion on the next reboot
-- Windows may recreate some files later after a new update scan or download — that is normal
-
 ### Block Windows 11 Upgrade
 
-Option `[8]` toggles a Group Policy lock that pins the machine to Windows 10:
+Option `[7]` toggles a Group Policy lock that pins the machine to Windows 10:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -229,7 +259,7 @@ The tool pins the machine to **Windows 10 22H2**, which is the final Windows 10 
 
 ### Usage
 
-**From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 3*
+**From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 5*
 
 **From terminal:**
 
