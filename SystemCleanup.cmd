@@ -15,6 +15,8 @@ set "cReset=%ESC%[0m"
 set "cCyan=%ESC%[36m"
 set "cGreen=%ESC%[92m"
 set "cYellow=%ESC%[93m"
+set "cBlue=%ESC%[94m"
+set "cMagenta=%ESC%[95m"
 set "cRed=%ESC%[91m"
 set "cGray=%ESC%[90m"
 set "cWhite=%ESC%[37m"
@@ -74,7 +76,7 @@ echo.
 echo    %cMagenta%[ 4 ]%cReset% Windows Update Cleanup ^(Disk Cleanup Utility^)
 echo          %cGray%cleanmgr /sagerun:88 ^(best after updates + reboot^)%cReset%
 echo.
-echo    %cWhite%[ 5 ]%cReset% Windows Update Manager
+echo    %cBlue%[ 5 ]%cReset% Windows Update Manager
 echo          %cGray%Hide/unhide/list updates, reset cache, block Win11%cReset%
 echo.
 echo    %cRed%[ X ]%cReset% Close / Cancel

@@ -173,3 +173,11 @@
 - Guardrail/rule: In this repo, when `SystemCleanup.cmd` needs computed PowerShell output for menu text, prefer `-File "%~dp0ManageUpdates.ps1" -Action ...` over inline `-Command` snippets. Keep menu-status computation inside PowerShell, not in batch quoting.
 - Files affected: `ManageUpdates.ps1`, `SystemCleanup.cmd`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; `git diff --check`.
+
+### Entry - 2026-03-12 (Define explicit ANSI colors for main-menu options)
+- Date: 2026-03-12
+- Problem: Main-menu options `[4]` and `[5]` both rendered as white, so the new cleanup actions did not visually separate well.
+- Root cause: `SystemCleanup.cmd` referenced `%cMagenta%` without defining it, and option `[5]` reused `%cWhite%`.
+- Guardrail/rule: Keep every menu color token explicitly defined in `SystemCleanup.cmd`. For the current main menu, use `magenta` for `[4] Windows Update Cleanup` and `blue` for `[5] Windows Update Manager` so adjacent options stay visually distinct.
+- Files affected: `SystemCleanup.cmd`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: Static review of ANSI variable definitions and menu color usage.
