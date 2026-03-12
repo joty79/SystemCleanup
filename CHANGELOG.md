@@ -40,4 +40,5 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Restyled `FullCleanup.cmd` on the `wt` branch to match the familiar CMD full-cleanup look more closely and fixed its quoted-command dispatch so the split-pane runner executes `SFC` / `DISM` correctly.
 - Changed the WT split-pane launcher for `Full Cleanup` from `cmd.exe /k` to `cmd.exe /c`, so after the final `Press any key to close this pane...` prompt the pane actually closes instead of dropping to a `C:\...>` prompt.
 - Fixed `Live SoftwareDistribution Cleanup` so its before/after/freed size summary no longer crashes under strict PowerShell execution when reading the measured size result.
+- Added targeted debug logging around `Windows Update Cleanup (Disk Cleanup Utility)` so `cleanmgr /sagerun:88` runs now record slot snapshots, process heartbeats, and post-run state in a dedicated troubleshooting log.
 

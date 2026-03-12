@@ -277,3 +277,11 @@
 - Guardrail/rule: In this repo, size-summary helpers should read measured properties through `PSObject.Properties[...]` and treat missing/null values as `0` instead of assuming `.Sum` is always safe to access directly.
 - Files affected: `ManageUpdates.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of strict-safe size-summary path.
+
+### Entry - 2026-03-13 (Targeted debug logging for Windows Update Cleanup)
+- Date: 2026-03-13
+- Problem: `Windows Update Cleanup (Disk Cleanup Utility)` showed machine-specific hangs/weird focus behavior under WT-backed sessions, but the existing output gave no visibility into slot state or process lifecycle.
+- Root cause: The `cleanmgr /sagerun:88` path had no targeted diagnostics for `VolumeCaches` slot isolation, spawned `cleanmgr` PIDs, or lingering processes after the visible UI stopped responding.
+- Guardrail/rule: Keep troubleshooting output for option `[4]` in a dedicated debug log under `%LOCALAPPDATA%\SystemCleanupContext\logs`. Record `StateFlags` snapshots before/after isolate and restore, `cleanmgr` process snapshots, and periodic heartbeats while waiting, instead of turning on verbose logging globally.
+- Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of debug-log path, slot snapshots, and heartbeat logging.

@@ -43,6 +43,110 @@ function Format-CleanMgrSlotValueName {
     return ('StateFlags{0:D4}' -f $Slot)
 }
 
+function Get-SystemCleanupLogDirectory {
+    $candidatePaths = @(
+        (Join-Path $env:LOCALAPPDATA 'SystemCleanupContext\logs'),
+        (Join-Path $env:TEMP 'SystemCleanup')
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    foreach ($candidatePath in $candidatePaths) {
+        try {
+            if (-not (Test-Path -LiteralPath $candidatePath)) {
+                New-Item -Path $candidatePath -ItemType Directory -Force -ErrorAction Stop | Out-Null
+            }
+            return $candidatePath
+        }
+        catch {
+            continue
+        }
+    }
+
+    return ''
+}
+
+function New-WindowsUpdateCleanupDebugLogPath {
+    $logDirectory = Get-SystemCleanupLogDirectory
+    if ([string]::IsNullOrWhiteSpace($logDirectory)) {
+        return ''
+    }
+
+    return (Join-Path $logDirectory ("WindowsUpdateCleanup_debug_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss')))
+}
+
+function Write-WindowsUpdateCleanupDebugLog {
+    param(
+        [string]$Path,
+        [string]$Message
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return
+    }
+
+    try {
+        $line = '{0} | {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'), $Message
+        Add-Content -LiteralPath $Path -Value $line -Encoding UTF8 -ErrorAction Stop
+    }
+    catch {
+    }
+}
+
+function Get-CleanMgrProcessSnapshot {
+    $rows = @()
+
+    foreach ($process in @(Get-Process -Name cleanmgr -ErrorAction SilentlyContinue)) {
+        $rows += [pscustomobject]@{
+            Id = $process.Id
+            ProcessName = $process.ProcessName
+            MainWindowTitle = [string]$process.MainWindowTitle
+            Responding = if ($null -ne $process.Responding) { [string]$process.Responding } else { '' }
+            StartTime = try { $process.StartTime.ToString('yyyy-MM-dd HH:mm:ss') } catch { '' }
+        }
+    }
+
+    return $rows
+}
+
+function Get-VolumeCachesSlotSnapshot {
+    param([int]$Slot = 88)
+
+    $volumeCachesRoot = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches'
+    $valueName = Format-CleanMgrSlotValueName -Slot $Slot
+    $rows = @()
+
+    foreach ($subKey in @(Get-ChildItem -LiteralPath $volumeCachesRoot -ErrorAction SilentlyContinue)) {
+        $existing = Get-ItemProperty -LiteralPath $subKey.PSPath -Name $valueName -ErrorAction SilentlyContinue
+        $hasValue = $null -ne $existing -and $null -ne $existing.$valueName
+        if ($hasValue) {
+            $rows += [pscustomobject]@{
+                KeyName = $subKey.PSChildName
+                ValueName = $valueName
+                Value = [int]$existing.$valueName
+            }
+        }
+    }
+
+    return $rows
+}
+
+function Write-StructuredDebugBlock {
+    param(
+        [string]$Path,
+        [string]$Title,
+        [object[]]$Rows
+    )
+
+    Write-WindowsUpdateCleanupDebugLog -Path $Path -Message ('--- {0} ---' -f $Title)
+    if (-not $Rows -or @($Rows).Count -eq 0) {
+        Write-WindowsUpdateCleanupDebugLog -Path $Path -Message '(none)'
+        return
+    }
+
+    foreach ($row in @($Rows)) {
+        Write-WindowsUpdateCleanupDebugLog -Path $Path -Message (($row | ConvertTo-Json -Compress -Depth 5))
+    }
+}
+
 function Invoke-RegCommand {
     param(
         [string[]]$Arguments,
@@ -566,7 +670,10 @@ function Restore-IsolatedUpdateCleanupSlot {
 }
 
 function Invoke-IsolatedWindowsUpdateCleanup {
-    param([int]$Slot = 88)
+    param(
+        [int]$Slot = 88,
+        [string]$DebugLogPath = ''
+    )
 
     $cleanMgrPath = Join-Path $env:SystemRoot 'System32\cleanmgr.exe'
     if (-not (Test-Path -LiteralPath $cleanMgrPath)) {
@@ -575,15 +682,40 @@ function Invoke-IsolatedWindowsUpdateCleanup {
 
     $slotState = $null
     try {
+        Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Starting isolated cleanmgr run. Path=$cleanMgrPath Slot=$Slot WT_SESSION=$($env:WT_SESSION)"
+        Write-StructuredDebugBlock -Path $DebugLogPath -Title 'StateFlags before isolate' -Rows (Get-VolumeCachesSlotSnapshot -Slot $Slot)
+        Write-StructuredDebugBlock -Path $DebugLogPath -Title 'cleanmgr processes before start' -Rows (Get-CleanMgrProcessSnapshot)
+
         $slotState = Set-IsolatedUpdateCleanupSlot -Slot $Slot
-        $process = Start-Process -FilePath $cleanMgrPath -ArgumentList "/sagerun:$Slot" -WindowStyle Hidden -Wait -PassThru
+        Write-StructuredDebugBlock -Path $DebugLogPath -Title 'StateFlags after isolate' -Rows (Get-VolumeCachesSlotSnapshot -Slot $Slot)
+
+        $process = Start-Process -FilePath $cleanMgrPath -ArgumentList "/sagerun:$Slot" -WindowStyle Hidden -PassThru
+        Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Started cleanmgr PID=$($process.Id)"
+
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $nextHeartbeatSeconds = 5
+        while (-not $process.HasExited) {
+            Start-Sleep -Seconds 1
+            try { $process.Refresh() } catch {}
+
+            if ($stopwatch.Elapsed.TotalSeconds -ge $nextHeartbeatSeconds) {
+                Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message ("Heartbeat: cleanmgr PID={0} alive after {1:N0}s" -f $process.Id, $stopwatch.Elapsed.TotalSeconds)
+                Write-StructuredDebugBlock -Path $DebugLogPath -Title 'cleanmgr processes heartbeat' -Rows (Get-CleanMgrProcessSnapshot)
+                $nextHeartbeatSeconds += 5
+            }
+        }
+
+        Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Primary cleanmgr process exited. PID=$($process.Id) ExitCode=$($process.ExitCode)"
+        Write-StructuredDebugBlock -Path $DebugLogPath -Title 'cleanmgr processes after exit' -Rows (Get-CleanMgrProcessSnapshot)
         return [pscustomobject]@{
             ExitCode = $process.ExitCode
             Slot = $Slot
+            DebugLogPath = $DebugLogPath
         }
     }
     finally {
         Restore-IsolatedUpdateCleanupSlot -State $slotState
+        Write-StructuredDebugBlock -Path $DebugLogPath -Title 'StateFlags after restore' -Rows (Get-VolumeCachesSlotSnapshot -Slot $Slot)
     }
 }
 
@@ -788,6 +920,7 @@ function Remove-LiveSoftwareDistributionDownload {
 
 function Invoke-WindowsUpdateCleanup {
     $slot = 88
+    $debugLogPath = New-WindowsUpdateCleanupDebugLogPath
 
     Write-Host "`n  🔵 WINDOWS UPDATE CLEANUP (DISK CLEANUP UTILITY)" -ForegroundColor Cyan
     Write-Host "  $('─' * 54)" -ForegroundColor DarkGray
@@ -804,6 +937,10 @@ function Invoke-WindowsUpdateCleanup {
     $beforeInfo = Get-ComponentStoreCleanupInfo
     Show-ComponentStoreCleanupInfo -Info $beforeInfo -Title 'Current component store status'
     Write-Host ""
+    if (-not [string]::IsNullOrWhiteSpace($debugLogPath)) {
+        Write-Host "  Debug log: $debugLogPath" -ForegroundColor DarkGray
+        Write-Host ""
+    }
 
     $confirm = Read-Host "  Proceed? (Y/N)"
     if ($confirm -notmatch '^[Yy]') {
@@ -813,10 +950,13 @@ function Invoke-WindowsUpdateCleanup {
 
     Write-Host "`n  Running cleanmgr /sagerun:$slot ..." -ForegroundColor Yellow
     try {
-        $runResult = Invoke-IsolatedWindowsUpdateCleanup -Slot $slot
+        $runResult = Invoke-IsolatedWindowsUpdateCleanup -Slot $slot -DebugLogPath $debugLogPath
     }
     catch {
         Write-Host "  Failed to run Disk Cleanup Utility: $($_.Exception.Message)" -ForegroundColor Red
+        if (-not [string]::IsNullOrWhiteSpace($debugLogPath)) {
+            Write-Host "  Debug log: $debugLogPath" -ForegroundColor DarkGray
+        }
         return
     }
 
@@ -830,6 +970,9 @@ function Invoke-WindowsUpdateCleanup {
         Write-Host "  ⚠️ Windows Update Cleanup finished with exit code $($runResult.ExitCode)." -ForegroundColor Yellow
     }
     Write-Host "     Command: cleanmgr /sagerun:$slot" -ForegroundColor DarkGray
+    if (-not [string]::IsNullOrWhiteSpace($runResult.DebugLogPath)) {
+        Write-Host "     Debug log: $($runResult.DebugLogPath)" -ForegroundColor DarkGray
+    }
     Write-Host ""
 
     Show-ComponentStoreCleanupInfo -Info $beforeInfo -Title 'Before cleanup'

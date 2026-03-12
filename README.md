@@ -164,6 +164,7 @@ cleanmgr /sagerun:88
 - Leaves the live `SoftwareDistribution` cache alone
 - May also scavenge `C:\Windows\WinSxS\Temp\PendingDeletes`
 - Before and after the run, the tool shows `Reclaimable packages`, `Backups and Disabled Features`, and `Cleanup recommended`
+- Writes a dedicated debug log under `%LOCALAPPDATA%\SystemCleanupContext\logs` so machine-specific `cleanmgr` / slot issues can be diagnosed without enabling verbose logging for the whole tool
 
 **Best used:** after Windows Updates are installed and the PC has rebooted.
 
