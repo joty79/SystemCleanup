@@ -8,8 +8,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$script:LogDir = 'D:\Temp\SystemCleanup'
-$script:LogFile = Join-Path $script:LogDir ("SystemCleanup_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
+$script:LogDir = ''
+$script:LogFile = ''
 $script:PwshExe = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) {
     (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
 }
@@ -20,8 +20,35 @@ else {
 function Ensure-Directory {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) {
-        New-Item -Path $Path -ItemType Directory -Force | Out-Null
+        New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
     }
+}
+
+function Initialize-Logging {
+    $logName = "SystemCleanup_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss')
+    $candidates = @(
+        'D:\Temp\SystemCleanup',
+        (Join-Path $env:LOCALAPPDATA 'SystemCleanupContext\logs'),
+        (Join-Path $env:TEMP 'SystemCleanup')
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    foreach ($candidate in $candidates) {
+        try {
+            Ensure-Directory -Path $candidate
+            $probePath = Join-Path $candidate ([guid]::NewGuid().ToString('N') + '.tmp')
+            Set-Content -LiteralPath $probePath -Value '' -Encoding UTF8 -ErrorAction Stop
+            Remove-Item -LiteralPath $probePath -Force -ErrorAction Stop
+            $script:LogDir = $candidate
+            $script:LogFile = Join-Path $candidate $logName
+            return
+        }
+        catch {
+            continue
+        }
+    }
+
+    $script:LogDir = ''
+    $script:LogFile = ''
 }
 
 function Test-IsAdmin {
@@ -78,9 +105,16 @@ function Write-Log {
         [string]$Message
     )
 
-    Ensure-Directory -Path $script:LogDir
+    if ([string]::IsNullOrWhiteSpace($script:LogFile)) {
+        return
+    }
+
     $line = '{0} | {1} | {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'), $Level, $Message
-    Add-Content -Path $script:LogFile -Value $line -Encoding UTF8
+    try {
+        Ensure-Directory -Path $script:LogDir
+        Add-Content -Path $script:LogFile -Value $line -Encoding UTF8 -ErrorAction Stop
+    }
+    catch {}
 }
 
 function Read-MainMenuKey {
@@ -158,7 +192,12 @@ function Invoke-FullCleanup {
     Write-Host '   FULL SYSTEM CLEANUP' -ForegroundColor White
     Write-Host '==========================================' -ForegroundColor Cyan
     Write-Host ''
-    Write-Host ("Logs saved to: {0}" -f $script:LogFile) -ForegroundColor DarkGray
+    if ([string]::IsNullOrWhiteSpace($script:LogFile)) {
+        Write-Host 'Logs disabled: no writable log directory was available.' -ForegroundColor DarkYellow
+    }
+    else {
+        Write-Host ("Logs saved to: {0}" -f $script:LogFile) -ForegroundColor DarkGray
+    }
     Write-Host ''
 
     Reset-TrustedInstaller
@@ -230,6 +269,8 @@ function Show-MainMenu {
 if (Start-PreferredHost) {
     return
 }
+
+Initialize-Logging
 
 while ($true) {
     Show-MainMenu

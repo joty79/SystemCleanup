@@ -53,7 +53,8 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 │  ⑥ CleanInFlight.ps1  (WinSxS\Temp deep clean)             │
 │  ⑦ Reset TrustedInstaller + SFC /scannow  (verification)   │
 │                                                             │
-│  📄 All output logged to D:\Temp\SystemCleanup\             │
+│  📄 Logs prefer D:\Temp\SystemCleanup\ and fall back        │
+│     automatically when D: is not available                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -72,6 +73,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\SystemCleanup.ps1
 ```
 
 Includes SFC, DISM, and WinSxS Temp cleanup with logging in one run. Actual duration varies a lot by system state.
+
+By default the `wt` launcher prefers `D:\Temp\SystemCleanup` for logs, but if that drive is missing or not writable it falls back automatically to a safe local path such as `%LOCALAPPDATA%\SystemCleanupContext\logs`.
 
 ---
 

@@ -229,3 +229,11 @@
 - Guardrail/rule: On the `wt` branch, the primary interactive entrypoint is `SystemCleanup.ps1`, not `SystemCleanup.cmd`. Installer profile entries and the static `.reg` command path should target `pwsh.exe -NoProfile -ExecutionPolicy Bypass -File "{InstallRoot}\SystemCleanup.ps1"`. Keep `SystemCleanup.cmd` only as a legacy compatibility artifact while the PowerShell launcher is evaluated.
 - Files affected: `SystemCleanup.ps1`, `Install.ps1`, `SystemCleanup.reg`, `.gitignore`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of installer profile and `.reg` command strings.
+
+### Entry - 2026-03-12 (wt branch: logging must not depend on D: existing)
+- Date: 2026-03-12
+- Problem: The new PowerShell launcher could fail immediately on machines or VMs that only had a `C:` drive because logging still hardcoded `D:\Temp\SystemCleanup`.
+- Root cause: The `wt` branch switched the main menu into `SystemCleanup.ps1`, but its logging path logic still assumed the desktop machine's `D:` layout instead of probing for a writable path.
+- Guardrail/rule: On the `wt` branch, `SystemCleanup.ps1` should prefer `D:\Temp\SystemCleanup` for logs but must automatically fall back to a writable local path such as `%LOCALAPPDATA%\SystemCleanupContext\logs` or `%TEMP%\SystemCleanup`. Logging failures must never abort the cleanup flow.
+- Files affected: `SystemCleanup.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of fallback path selection and no-throw log writes.

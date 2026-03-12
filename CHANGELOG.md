@@ -33,4 +33,5 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Simplified the `wt.exe` relay on the `wt` branch to launch through a temporary `.cmd` trampoline instead of an inline `call ... --wt-hosted` command string, reducing Windows Terminal argument-parsing glitches during startup.
 - Added a new `SystemCleanup.ps1` main launcher on the `wt` branch and switched the installer / `.reg` command path to `pwsh.exe -File SystemCleanup.ps1`, removing `cmd.exe` from the primary interactive launch path.
 - Removed the stale `.gitignore` entry that used to hide `SystemCleanup.ps1`, so the new PowerShell launcher can actually be tracked on the `wt` branch.
+- Updated the `wt` launcher logging path so it prefers `D:\Temp\SystemCleanup` but automatically falls back to a writable local path when a machine only has `C:` or the `D:` drive is not ready.
 
