@@ -269,3 +269,11 @@
 - Guardrail/rule: For the `wt` branch split-pane full cleanup flow, launch the runner with `cmd.exe /c`, not `/k`, so the pane closes cleanly after the final `pause`/keypress.
 - Files affected: `SystemCleanup.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: Static review of WT split-pane argument list.
+
+### Entry - 2026-03-12 (strict-safe size summary for live SoftwareDistribution cleanup)
+- Date: 2026-03-12
+- Problem: Main-menu option `[3] Live SoftwareDistribution Cleanup` could complete the actual cleanup successfully but then crash while printing the final `Before / After / Freed` size summary.
+- Root cause: The size helper in `ManageUpdates.ps1` accessed `.Sum` directly on the `Measure-Object` result, which is brittle under strict execution when the property/value is absent or null.
+- Guardrail/rule: In this repo, size-summary helpers should read measured properties through `PSObject.Properties[...]` and treat missing/null values as `0` instead of assuming `.Sum` is always safe to access directly.
+- Files affected: `ManageUpdates.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of strict-safe size-summary path.

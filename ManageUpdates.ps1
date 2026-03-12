@@ -446,11 +446,17 @@ function Get-DirectorySizeMB {
         return 0
     }
 
-    $sum = (Get-ChildItem -LiteralPath $Path -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
-    if ($null -eq $sum) {
+    $measure = Get-ChildItem -LiteralPath $Path -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum
+    if ($null -eq $measure) {
         return 0
     }
 
+    $sumProperty = $measure.PSObject.Properties['Sum']
+    if ($null -eq $sumProperty -or $null -eq $sumProperty.Value) {
+        return 0
+    }
+
+    $sum = [double]$sumProperty.Value
     return [math]::Round(($sum / 1MB), 1)
 }
 

@@ -39,4 +39,5 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Updated the experimental `wt` branch so main-menu option `[1] Full Cleanup` now opens in a dedicated Windows Terminal split pane backed by `FullCleanup.cmd`, instead of trying to run the whole servicing flow inline in the menu pane.
 - Restyled `FullCleanup.cmd` on the `wt` branch to match the familiar CMD full-cleanup look more closely and fixed its quoted-command dispatch so the split-pane runner executes `SFC` / `DISM` correctly.
 - Changed the WT split-pane launcher for `Full Cleanup` from `cmd.exe /k` to `cmd.exe /c`, so after the final `Press any key to close this pane...` prompt the pane actually closes instead of dropping to a `C:\...>` prompt.
+- Fixed `Live SoftwareDistribution Cleanup` so its before/after/freed size summary no longer crashes under strict PowerShell execution when reading the measured size result.
 
