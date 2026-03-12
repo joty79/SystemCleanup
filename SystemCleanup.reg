@@ -14,11 +14,11 @@ Windows Registry Editor Version 5.00
 "Icon"="imageres.dll,-5323"
 
 [HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\SystemTools\shell\SystemCleanup\Command]
-@="cmd.exe /c \"D:\\Users\\joty79\\scripts\\SystemCleanup\\SystemCleanup.cmd\""
+@="pwsh.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\Users\\joty79\\scripts\\SystemCleanup\\SystemCleanup.ps1\""
 
 [HKEY_CURRENT_USER\Software\Classes\DesktopBackground\Shell\SystemTools\shell\SystemCleanup]
 "MUIVerb"="Windows Update CleanUp"
 "Icon"="imageres.dll,-5323"
 
 [HKEY_CURRENT_USER\Software\Classes\DesktopBackground\Shell\SystemTools\shell\SystemCleanup\Command]
-@="cmd.exe /c \"D:\\Users\\joty79\\scripts\\SystemCleanup\\SystemCleanup.cmd\""
+@="pwsh.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\Users\\joty79\\scripts\\SystemCleanup\\SystemCleanup.ps1\""

@@ -1,6 +1,13 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+set "SYSTEMCLEANUP_WT_HOSTED=0"
+if /i "%~1"=="--wt-hosted" (
+    set "SYSTEMCLEANUP_WT_HOSTED=1"
+    shift
+)
+if defined WT_SESSION set "SYSTEMCLEANUP_WT_HOSTED=1"
+
 REM Resolve PowerShell host (pwsh preferred, fallback to Windows PowerShell)
 where pwsh.exe >nul 2>&1
 if "%errorlevel%"=="0" (
@@ -41,6 +48,14 @@ if not "%errorlevel%"=="0" (
 exit /b
 
 :IsAdmin
+
+set "SYSTEMCLEANUP_IN_SAFE_MODE=0"
+if defined SAFEBOOT_OPTION set "SYSTEMCLEANUP_IN_SAFE_MODE=1"
+
+if "%SYSTEMCLEANUP_WT_HOSTED%"=="0" if "%SYSTEMCLEANUP_IN_SAFE_MODE%"=="0" (
+    where wt.exe >nul 2>&1
+    if "%errorlevel%"=="0" goto :RelaunchInWindowsTerminal
+)
 
 set "LogDir=D:\Temp\SystemCleanup"
 if not exist "%LogDir%" mkdir "%LogDir%"
@@ -95,10 +110,30 @@ if "%CHOICE%" NEQ "1" (
     timeout /t 2 /nobreak >nul
     goto :Menu
 )
+goto :FullCleanup
+
+REM ---------------------------------------------------------
+REM WINDOWS TERMINAL HOST RELAUNCH
+REM ---------------------------------------------------------
+:RelaunchInWindowsTerminal
+echo %cCyan%Launching in Windows Terminal...%cReset%
+set "WT_LAUNCHER=%TEMP%\SystemCleanup_wt_%RANDOM%%RANDOM%.cmd"
+(
+    echo @echo off
+    echo call "%~f0" --wt-hosted
+    echo del "%%~f0" ^>nul 2^>^&1
+) > "%WT_LAUNCHER%"
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'wt.exe' -ArgumentList @('-w','0','new-tab','cmd.exe','/k','""%WT_LAUNCHER%""')"
+if not "%errorlevel%"=="0" (
+    echo %cYellow%Windows Terminal launch failed. Falling back to classic console.%cReset%
+    timeout /t 2 /nobreak >nul
+)
+exit /b
 
 REM ---------------------------------------------------------
 REM MAIN EXECUTION (OPTION 1)
 REM ---------------------------------------------------------
+:FullCleanup
 cls
 echo.
 echo %cCyan%==========================================%cReset%

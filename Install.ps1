@@ -40,6 +40,7 @@ $script:ProfileJson = @'
   ],
   "required_package_entries": [
     "Install.ps1",
+    "SystemCleanup.ps1",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
     "ManageUpdates.ps1",
@@ -47,6 +48,7 @@ $script:ProfileJson = @'
   ],
   "deploy_entries": [
     "Install.ps1",
+    "SystemCleanup.ps1",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
     "ManageUpdates.ps1",
@@ -55,6 +57,7 @@ $script:ProfileJson = @'
   "preserve_existing_entries": [],
   "verify_core_files": [
     "Install.ps1",
+    "SystemCleanup.ps1",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
     "ManageUpdates.ps1"
@@ -93,7 +96,7 @@ $script:ProfileJson = @'
       "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "type": "REG_SZ",
-      "value": "cmd.exe /c \"{InstallRoot}\\SystemCleanup.cmd\""
+      "value": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File \"{InstallRoot}\\SystemCleanup.ps1\""
     },
     {
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
@@ -111,7 +114,7 @@ $script:ProfileJson = @'
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "type": "REG_SZ",
-      "value": "cmd.exe /c \"{InstallRoot}\\SystemCleanup.cmd\""
+      "value": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File \"{InstallRoot}\\SystemCleanup.ps1\""
     }
   ],
   "registry_verify": [
@@ -123,7 +126,7 @@ $script:ProfileJson = @'
     {
       "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup\\Command",
       "name": "(default)",
-      "expected": "cmd.exe /c \"{InstallRoot}\\SystemCleanup.cmd\""
+      "expected": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File \"{InstallRoot}\\SystemCleanup.ps1\""
     },
     {
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
@@ -133,7 +136,7 @@ $script:ProfileJson = @'
     {
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup\\Command",
       "name": "(default)",
-      "expected": "cmd.exe /c \"{InstallRoot}\\SystemCleanup.cmd\""
+      "expected": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File \"{InstallRoot}\\SystemCleanup.ps1\""
     }
   ],
   "wrapper_patches": []

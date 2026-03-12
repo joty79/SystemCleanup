@@ -205,3 +205,27 @@
 - Guardrail/rule: For the isolated `cleanmgr /sagerun:88` slot in this repo, use `reg.exe add/delete` for `VolumeCaches` state-flag writes and restores instead of the PowerShell registry provider. If the process is not elevated, surface the access failure directly instead of masking it behind a binder-style exception.
 - Files affected: `ManageUpdates.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; dry-run helper invocation showed clear `Access is denied` in a non-elevated shell instead of the previous binder exception.
+
+### Entry - 2026-03-12 (wt branch: relay launcher into Windows Terminal when possible)
+- Date: 2026-03-12
+- Problem: The current CMD launcher preserves the desired layout, but emoji/Nerd Font rendering and overall console appearance are much better in Windows Terminal than in the classic console host.
+- Root cause: The context-menu command still launches `SystemCleanup.cmd` through `cmd.exe`, so the tool always starts in the classic console unless it explicitly relaunches itself.
+- Guardrail/rule: On the experimental `wt` branch, keep the existing CMD UI and logic, but after elevation relay into `wt.exe` when all three conditions are true: not already inside Windows Terminal, `wt.exe` is available, and the system is not in Safe Mode. If any of those checks fail, continue in the classic console host without breaking the existing workflow.
+- Files affected: `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: Static review of launcher flow, argument relay, and Safe Mode / missing-`wt` fallback conditions.
+
+### Entry - 2026-03-12 (wt branch: prefer temp launcher over inline wt command string)
+- Date: 2026-03-12
+- Problem: The first `wt.exe` relay attempt could behave like a stuck/looped keypress in the main menu, and Windows Terminal showed a suspicious `cmd.exe - call` tab title.
+- Root cause: The inline `cmd.exe /k call "...SystemCleanup.cmd" --wt-hosted` argument string was too fragile for Windows Terminal command parsing.
+- Guardrail/rule: On the `wt` branch, when relaunching into Windows Terminal, prefer a temporary `.cmd` trampoline file over an inline `call` command string. This keeps the `cmd.exe` startup command simple and reduces WT argument-parsing surprises.
+- Files affected: `SystemCleanup.cmd`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: Static review of the temp-launcher relay flow.
+
+### Entry - 2026-03-12 (wt branch: switch primary launcher to SystemCleanup.ps1)
+- Date: 2026-03-12
+- Problem: Even with a `wt.exe` relay, keeping the main interactive UI inside `SystemCleanup.cmd` kept dragging batch-host quirks into the experiment.
+- Root cause: The original tool architecture used CMD as the primary menu host and PowerShell only for sub-actions.
+- Guardrail/rule: On the `wt` branch, the primary interactive entrypoint is `SystemCleanup.ps1`, not `SystemCleanup.cmd`. Installer profile entries and the static `.reg` command path should target `pwsh.exe -NoProfile -ExecutionPolicy Bypass -File "{InstallRoot}\SystemCleanup.ps1"`. Keep `SystemCleanup.cmd` only as a legacy compatibility artifact while the PowerShell launcher is evaluated.
+- Files affected: `SystemCleanup.ps1`, `Install.ps1`, `SystemCleanup.reg`, `.gitignore`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of installer profile and `.reg` command strings.

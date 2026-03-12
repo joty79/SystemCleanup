@@ -59,15 +59,16 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 
 Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. After any option completes, the tool **returns to the main menu** — only `ESC` exits the CMD launcher.
 
+On the experimental `wt` branch, the main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing.
+
 ### Usage
 
 **From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 1*
 
 **From terminal:**
 
-```cmd
-:: Run full cleanup directly
-SystemCleanup.cmd
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\SystemCleanup.ps1
 ```
 
 Includes SFC, DISM, and WinSxS Temp cleanup with logging in one run. Actual duration varies a lot by system state.
@@ -322,7 +323,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -Action Uninstall -F
 
 ```
 SystemCleanup/
-├── SystemCleanup.cmd          # Main menu launcher (CMD, auto-elevates, loops)
+  ├── SystemCleanup.ps1          # Main menu launcher (PowerShell, prefers Windows Terminal)
+  ├── SystemCleanup.cmd          # Legacy CMD launcher kept for compatibility / branch work
 ├── CleanInFlight.ps1          # WinSxS\Temp cleanup with MoveFileEx fallback
 ├── ManageUpdates.ps1          # Windows Update Manager + Win11 block (COM API)
 ├── Install.ps1                # Installer/updater/uninstaller (InstallerCore)

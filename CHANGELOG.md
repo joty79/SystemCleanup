@@ -29,4 +29,8 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Changed the main `SystemCleanup.cmd` launcher to show `[ESC] Close / Cancel` and read the actual Escape key via `ManageUpdates.ps1`, instead of showing `[X]` with `set /p`.
 - Replaced the misleading `Takes 20-40 minutes` text under main-menu option `[1] Full Cleanup` with a plain description of what the action actually runs.
 - Reworked the isolated `cleanmgr /sagerun:88` slot handling to use `reg.exe` instead of the PowerShell registry provider, avoiding the earlier `Argument types do not match` failure path and surfacing clear access errors when the process is not elevated.
+- Added a `wt.exe` host relay to `SystemCleanup.cmd` on the `wt` branch: when Windows Terminal is available and the system is not in Safe Mode, the existing CMD UI now relaunches inside Windows Terminal while keeping the classic console as fallback.
+- Simplified the `wt.exe` relay on the `wt` branch to launch through a temporary `.cmd` trampoline instead of an inline `call ... --wt-hosted` command string, reducing Windows Terminal argument-parsing glitches during startup.
+- Added a new `SystemCleanup.ps1` main launcher on the `wt` branch and switched the installer / `.reg` command path to `pwsh.exe -File SystemCleanup.ps1`, removing `cmd.exe` from the primary interactive launch path.
+- Removed the stale `.gitignore` entry that used to hide `SystemCleanup.ps1`, so the new PowerShell launcher can actually be tracked on the `wt` branch.
 
