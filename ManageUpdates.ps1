@@ -4,7 +4,7 @@
 
 param(
     [switch]$SilentCaller,
-    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup')]
+    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus')]
     [string]$Action = 'Menu'
 )
 
@@ -41,6 +41,16 @@ function Wait-ReturnToMenu {
 function Format-CleanMgrSlotValueName {
     param([int]$Slot)
     return ('StateFlags{0:D4}' -f $Slot)
+}
+
+function Get-LiveDownloadCacheStatusLine {
+    $downloadPath = 'C:\Windows\SoftwareDistribution\Download'
+    if (-not (Test-Path -LiteralPath $downloadPath)) {
+        return 'Download cache path not found'
+    }
+
+    $sizeMB = Get-DirectorySizeMB -Path $downloadPath
+    return "Clean live Download cache files ($sizeMB MB)"
 }
 
 # ─────────────────────────────────────────────
@@ -1160,6 +1170,10 @@ function Toggle-Win11Block {
 # ─────────────────────────────────────────────
 $directActionCompleted = $false
 switch ($Action) {
+    'LiveCleanupStatus' {
+        Write-Output (Get-LiveDownloadCacheStatusLine)
+        return
+    }
     'LiveCleanup' {
         Remove-LiveSoftwareDistributionDownload
         $directActionCompleted = $true

@@ -24,4 +24,5 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Promoted `Live SoftwareDistribution Cleanup` out of the Windows Update Manager and into main-menu option `[3]`, where the gray description line now shows the current live `Download` cache size.
 - Moved `Windows Update Manager` to main-menu option `[5]` and simplified its submenu back to hide/unhide/list, reset cache, stale backup cleanup, and Windows 11 block actions.
 - Fixed the main-menu live cache size probe in `SystemCleanup.cmd` so CMD launches the PowerShell one-liner correctly instead of showing a `'pwsh"... is not recognized` quoting error.
+- Replaced the main-menu live cache size one-liner with a dedicated `ManageUpdates.ps1 -Action LiveCleanupStatus` call so CMD no longer breaks on inline PowerShell quoting or string-token parsing.
 

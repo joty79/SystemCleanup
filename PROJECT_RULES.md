@@ -165,3 +165,11 @@
 - Guardrail/rule: For `cmd.exe` inline PowerShell probes, keep the executable token unquoted when it is a simple command name (`pwsh` / `powershell`), escape pipeline characters with `^|`, and avoid `usebackq` unless it is strictly needed.
 - Files affected: `SystemCleanup.cmd`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: Static review of CMD quoting; `git diff --check`.
+
+### Entry - 2026-03-12 (Prefer file-based PowerShell calls over CMD inline probes)
+- Date: 2026-03-12
+- Problem: Even after the first quoting fix, the main-menu live cache status probe could still break with `Unexpected token 'Download'` because `cmd.exe` and PowerShell string parsing remained too fragile.
+- Root cause: The batch file was still embedding non-trivial PowerShell expressions inline inside `for /f`, which is brittle for quotes, pipes, and strings with spaces.
+- Guardrail/rule: In this repo, when `SystemCleanup.cmd` needs computed PowerShell output for menu text, prefer `-File "%~dp0ManageUpdates.ps1" -Action ...` over inline `-Command` snippets. Keep menu-status computation inside PowerShell, not in batch quoting.
+- Files affected: `ManageUpdates.ps1`, `SystemCleanup.cmd`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; `git diff --check`.
