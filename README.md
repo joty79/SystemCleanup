@@ -190,6 +190,7 @@ If you hide first then reset, the `IsHidden` flag is stored in `SoftwareDistribu
 ### Live SoftwareDistribution Cleanup
 
 - Option `[6]` is the **space-recovery** path, not the hide/reset troubleshooting path
+- The menu itself shows the current live `Download` cache size next to option `[6]`
 - Before confirmation, it shows the current live `Download` cache size so you can decide whether the cleanup is worth running
 - It stops the update services temporarily and cleans the live `C:\Windows\SoftwareDistribution\Download` cache
 - It intentionally leaves `DataStore` / update history alone, so it is less disruptive than a full cache reset

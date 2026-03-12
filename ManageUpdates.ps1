@@ -410,6 +410,16 @@ function Get-DirectorySizeMB {
     return [math]::Round(($sum / 1MB), 1)
 }
 
+function Get-LiveDownloadCacheStatusLine {
+    $downloadPath = 'C:\Windows\SoftwareDistribution\Download'
+    if (-not (Test-Path -LiteralPath $downloadPath)) {
+        return 'Download cache path not found'
+    }
+
+    $sizeMB = Get-DirectorySizeMB -Path $downloadPath
+    return "Clean live Download cache files ($sizeMB MB)"
+}
+
 function Ensure-MoveFileExApi {
     if ('Win32.Kernel32' -as [type]) {
         return [Win32.Kernel32]
@@ -974,6 +984,7 @@ function Toggle-Win11Block {
 $menuLoop = $true
 while ($menuLoop) {
     $win11State = Get-Win11BlockState
+    $liveDownloadCacheStatus = Get-LiveDownloadCacheStatusLine
     $win11Status = switch ($win11State.StatusLabel) {
         'Policy active' { '🟢 Policy active' }
         'Policy mismatch' { '🟡 Policy mismatch' }
@@ -1005,7 +1016,7 @@ while ($menuLoop) {
     Write-Host "  [5]  Reset Update Cache" -ForegroundColor Red
     Write-Host "         Reset SoftwareDistribution + catroot2" -ForegroundColor DarkGray
     Write-Host "  [6]  Live SoftwareDistribution Cleanup" -ForegroundColor Yellow
-    Write-Host "         Clean live Download cache files" -ForegroundColor DarkGray
+    Write-Host "         $liveDownloadCacheStatus" -ForegroundColor DarkGray
     Write-Host "  [7]  Clean Stale Backup Folders" -ForegroundColor Magenta
     Write-Host "         Remove leftover .old_* folders" -ForegroundColor DarkGray
     Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
