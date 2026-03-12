@@ -42,4 +42,5 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Fixed `Live SoftwareDistribution Cleanup` so its before/after/freed size summary no longer crashes under strict PowerShell execution when reading the measured size result.
 - Added targeted debug logging around `Windows Update Cleanup (Disk Cleanup Utility)` so `cleanmgr /sagerun:88` runs now record slot snapshots, process heartbeats, and post-run state in a dedicated troubleshooting log.
 - Changed `Windows Update Cleanup` on the experimental `wt` branch to launch `cleanmgr` through an external classic `cmd` window when running inside Windows Terminal, avoiding the WT-hosted first-run hang/focus issue seen on some machines.
+- Improved the `Windows Update Cleanup` debug log so external-`cmd` runs now distinguish the `cmd` wrapper PID from the real `cleanmgr` child process and log newly observed `cleanmgr` PIDs explicitly.
 

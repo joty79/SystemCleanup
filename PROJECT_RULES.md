@@ -293,3 +293,11 @@
 - Guardrail/rule: For option `[4]`, when `WT_SESSION` is present, launch `cleanmgr /sagerun:88` via an external classic `cmd` window and clear WT-specific environment variables for that child process. Keep the existing direct path only for non-WT sessions.
 - Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of WT-session detection and external `cmd` launch path.
+
+### Entry - 2026-03-13 (Accurate child-process debug for external cleanmgr launch)
+- Date: 2026-03-13
+- Problem: The first targeted debug log for option `[4]` could misleadingly report the external `cmd` wrapper PID as if it were the real `cleanmgr` process.
+- Root cause: In WT-safe fallback mode the code waited on the wrapper process but did not distinguish that wrapper from newly spawned `cleanmgr` children.
+- Guardrail/rule: For external `cmd` launches of `cleanmgr`, capture a baseline of existing `cleanmgr` PIDs, log the wrapper PID separately, and record newly observed `cleanmgr` child PIDs via snapshot diff so the troubleshooting log reflects the real process lifecycle.
+- Files affected: `ManageUpdates.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of baseline-vs-child process logging.

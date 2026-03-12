@@ -107,6 +107,15 @@ function Get-CleanMgrProcessSnapshot {
     return $rows
 }
 
+function Get-NewCleanMgrProcesses {
+    param([int[]]$BaselineIds = @())
+
+    $baseline = @($BaselineIds)
+    return @(
+        Get-CleanMgrProcessSnapshot | Where-Object { $baseline -notcontains [int]$_.Id }
+    )
+}
+
 function Get-VolumeCachesSlotSnapshot {
     param([int]$Slot = 88)
 
@@ -684,7 +693,9 @@ function Invoke-IsolatedWindowsUpdateCleanup {
     try {
         Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Starting isolated cleanmgr run. Path=$cleanMgrPath Slot=$Slot WT_SESSION=$($env:WT_SESSION)"
         Write-StructuredDebugBlock -Path $DebugLogPath -Title 'StateFlags before isolate' -Rows (Get-VolumeCachesSlotSnapshot -Slot $Slot)
-        Write-StructuredDebugBlock -Path $DebugLogPath -Title 'cleanmgr processes before start' -Rows (Get-CleanMgrProcessSnapshot)
+        $baselineCleanMgrRows = @(Get-CleanMgrProcessSnapshot)
+        $baselineCleanMgrIds = @($baselineCleanMgrRows | ForEach-Object { [int]$_.Id })
+        Write-StructuredDebugBlock -Path $DebugLogPath -Title 'cleanmgr processes before start' -Rows $baselineCleanMgrRows
 
         $slotState = Set-IsolatedUpdateCleanupSlot -Slot $Slot
         Write-StructuredDebugBlock -Path $DebugLogPath -Title 'StateFlags after isolate' -Rows (Get-VolumeCachesSlotSnapshot -Slot $Slot)
@@ -695,34 +706,47 @@ function Invoke-IsolatedWindowsUpdateCleanup {
             $cmdExe = if (-not [string]::IsNullOrWhiteSpace($env:ComSpec)) { $env:ComSpec } else { (Join-Path $env:SystemRoot 'System32\cmd.exe') }
             $cmdArgs = @('/d', '/c', "`"$cleanMgrPath`" /sagerun:$Slot")
             Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message ("Launching cleanmgr via external cmd window: {0} {1}" -f $cmdExe, ($cmdArgs -join ' '))
-            $process = Start-Process -FilePath $cmdExe -ArgumentList $cmdArgs -PassThru -Wait -Environment @{
+            $process = Start-Process -FilePath $cmdExe -ArgumentList $cmdArgs -PassThru -Environment @{
                 WT_SESSION = ''
                 WT_PROFILE_ID = ''
                 WT_PANE = ''
                 WT_TAB_ID = ''
             }
+            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Started cmd wrapper PID=$($process.Id) Mode=$launchMode"
         }
         else {
             Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Launching cleanmgr directly in non-WT session."
             $process = Start-Process -FilePath $cleanMgrPath -ArgumentList "/sagerun:$Slot" -WindowStyle Hidden -PassThru
+            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Started cleanmgr PID=$($process.Id) Mode=$launchMode"
         }
-
-        Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Started cleanmgr PID=$($process.Id) Mode=$launchMode"
 
         $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
         $nextHeartbeatSeconds = 5
+        $seenNewCleanMgrIds = [System.Collections.Generic.HashSet[int]]::new()
         while (-not $process.HasExited) {
             Start-Sleep -Seconds 1
             try { $process.Refresh() } catch {}
 
+            foreach ($newRow in @(Get-NewCleanMgrProcesses -BaselineIds $baselineCleanMgrIds)) {
+                $newId = [int]$newRow.Id
+                if ($seenNewCleanMgrIds.Add($newId)) {
+                    Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message ("Observed cleanmgr child PID={0} Title='{1}' Responding={2}" -f $newRow.Id, $newRow.MainWindowTitle, $newRow.Responding)
+                }
+            }
+
             if ($stopwatch.Elapsed.TotalSeconds -ge $nextHeartbeatSeconds) {
-                Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message ("Heartbeat: cleanmgr PID={0} alive after {1:N0}s" -f $process.Id, $stopwatch.Elapsed.TotalSeconds)
+                Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message ("Heartbeat: launcher PID={0} Mode={1} alive after {2:N0}s" -f $process.Id, $launchMode, $stopwatch.Elapsed.TotalSeconds)
                 Write-StructuredDebugBlock -Path $DebugLogPath -Title 'cleanmgr processes heartbeat' -Rows (Get-CleanMgrProcessSnapshot)
                 $nextHeartbeatSeconds += 5
             }
         }
 
-        Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Primary cleanmgr process exited. PID=$($process.Id) ExitCode=$($process.ExitCode)"
+        if ($launchMode -eq 'ExternalCmd') {
+            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Cmd wrapper exited. PID=$($process.Id) ExitCode=$($process.ExitCode)"
+        }
+        else {
+            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Primary cleanmgr process exited. PID=$($process.Id) ExitCode=$($process.ExitCode)"
+        }
         Write-StructuredDebugBlock -Path $DebugLogPath -Title 'cleanmgr processes after exit' -Rows (Get-CleanMgrProcessSnapshot)
         return [pscustomobject]@{
             ExitCode = $process.ExitCode
