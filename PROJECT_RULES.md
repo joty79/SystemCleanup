@@ -141,3 +141,11 @@
 - Guardrail/rule: After every user-facing behavior change or troubleshooting-relevant fix, explicitly review whether `README.md` needs an update. Record notable shipped changes in `CHANGELOG.md` even when the README does not need to change.
 - Files affected: `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`.
 - Validation/tests run: Static review of README troubleshooting/status sections and changelog entry coverage.
+
+### Entry - 2026-03-12 (Separate live SoftwareDistribution cleanup from reset workflow)
+- Date: 2026-03-12
+- Problem: `Reset Update Cache` helped with hide/troubleshooting flows, but it did not provide a direct post-update disk cleanup path for the live `SoftwareDistribution\Download` cache that can grow very large after monthly updates.
+- Root cause: The repo only implemented rename-based reset semantics for `SoftwareDistribution`, not a separate live-cache cleanup action for reclaiming space without touching `DataStore` history.
+- Guardrail/rule: Keep `Reset Update Cache` as the troubleshooting/reset path, and expose live cleanup as a separate menu action. The live cleanup targets `C:\Windows\SoftwareDistribution\Download`, stops update services temporarily, deletes what it can immediately, and only uses reboot-time deletion as a fallback for locked leftovers.
+- Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of menu numbering, live-cache target scope, and reboot-fallback behavior.

@@ -395,6 +395,216 @@ function Start-UpdateServices {
     }
 }
 
+function Get-DirectorySizeMB {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return 0
+    }
+
+    $sum = (Get-ChildItem -LiteralPath $Path -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+    if ($null -eq $sum) {
+        return 0
+    }
+
+    return [math]::Round(($sum / 1MB), 1)
+}
+
+function Ensure-MoveFileExApi {
+    if ('Win32.Kernel32' -as [type]) {
+        return [Win32.Kernel32]
+    }
+
+    $signature = @'
+[DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+public static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, int dwFlags);
+'@
+
+    return Add-Type -MemberDefinition $signature -Name 'Kernel32' -Namespace 'Win32' -PassThru
+}
+
+function Schedule-PathsForDeletionOnReboot {
+    param([string[]]$Paths)
+
+    $existingPaths = @($Paths | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
+    if ($existingPaths.Count -eq 0) {
+        return [pscustomobject]@{
+            ScheduledFiles = 0
+            ScheduledDirectories = 0
+            UsedRegistryFallback = $false
+            Failed = @()
+        }
+    }
+
+    $files = @($existingPaths | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+    $directories = @($existingPaths | Where-Object { Test-Path -LiteralPath $_ -PathType Container } | Sort-Object Length -Descending)
+    $api = Ensure-MoveFileExApi
+
+    $scheduledFiles = 0
+    $scheduledDirectories = 0
+    $failed = [System.Collections.ArrayList]::new()
+
+    foreach ($filePath in $files) {
+        if ($api::MoveFileEx($filePath, $null, 4)) {
+            $scheduledFiles++
+        }
+        else {
+            [void]$failed.Add($filePath)
+        }
+    }
+
+    foreach ($dirPath in $directories) {
+        if ($api::MoveFileEx($dirPath, $null, 4)) {
+            $scheduledDirectories++
+        }
+        else {
+            [void]$failed.Add($dirPath)
+        }
+    }
+
+    if ($failed.Count -eq 0) {
+        return [pscustomobject]@{
+            ScheduledFiles = $scheduledFiles
+            ScheduledDirectories = $scheduledDirectories
+            UsedRegistryFallback = $false
+            Failed = @()
+        }
+    }
+
+    $regPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager'
+    $regName = 'PendingFileRenameOperations'
+    $existingEntries = @()
+
+    try {
+        $prop = Get-ItemProperty -Path $regPath -Name $regName -ErrorAction Stop
+        $existingEntries = [string[]]$prop.$regName
+    }
+    catch {
+    }
+
+    $newEntries = [System.Collections.ArrayList]::new()
+    foreach ($entry in $existingEntries) {
+        [void]$newEntries.Add($entry)
+    }
+
+    foreach ($failedPath in $failed) {
+        [void]$newEntries.Add("\??\$failedPath")
+        [void]$newEntries.Add('')
+    }
+
+    New-ItemProperty -Path $regPath -Name $regName -PropertyType MultiString -Value ([string[]]$newEntries) -Force | Out-Null
+
+    return [pscustomobject]@{
+        ScheduledFiles = $scheduledFiles + @($failed | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }).Count
+        ScheduledDirectories = $scheduledDirectories + @($failed | Where-Object { Test-Path -LiteralPath $_ -PathType Container }).Count
+        UsedRegistryFallback = $true
+        Failed = @()
+    }
+}
+
+function Remove-LiveSoftwareDistributionDownload {
+    Write-Host "`n  🔵 LIVE SOFTWAREDISTRIBUTION CLEANUP" -ForegroundColor Cyan
+    Write-Host "  $('─' * 40)" -ForegroundColor DarkGray
+    Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
+    Write-Host "      • Stop update services temporarily" -ForegroundColor Gray
+    Write-Host "      • Clean the live SoftwareDistribution\\Download cache" -ForegroundColor Gray
+    Write-Host "      • Keep DataStore / update history intact" -ForegroundColor Gray
+    Write-Host "      • Restart services" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  💡 Use this after updates to reclaim disk space." -ForegroundColor Cyan
+    Write-Host "     For hide/troubleshooting workflow, keep using [5] Reset Update Cache." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $confirm = Read-Host "  Proceed? (Y/N)"
+    if ($confirm -notmatch '^[Yy]') {
+        Write-Host "  Cancelled." -ForegroundColor DarkGray
+        return
+    }
+
+    $downloadPath = 'C:\Windows\SoftwareDistribution\Download'
+    if (-not (Test-Path -LiteralPath $downloadPath)) {
+        Write-Host "`n  ℹ️ $downloadPath not found." -ForegroundColor DarkGray
+        return
+    }
+
+    $beforeSizeMB = Get-DirectorySizeMB -Path $downloadPath
+    $children = @(Get-ChildItem -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue)
+    if ($children.Count -eq 0) {
+        Write-Host "`n  Download cache is already empty." -ForegroundColor Green
+        return
+    }
+
+    $optionalStopServices = @('UsoSvc', 'DoSvc')
+    $coreServices = @('wuauserv', 'cryptSvc', 'bits', 'msiserver')
+
+    Write-Host "`n  Stopping services..." -ForegroundColor Yellow
+    $null = Stop-UpdateServices -ServiceNames $optionalStopServices -Optional
+    $coreStopped = Stop-UpdateServices -ServiceNames $coreServices
+
+    Write-Host "`n  Deleting live download cache contents..." -ForegroundColor Yellow
+    $deletedCount = 0
+    foreach ($child in $children) {
+        try {
+            if ($child.PSIsContainer) {
+                cmd /c "rd /s /q `"$($child.FullName)`" 2>nul"
+            }
+            else {
+                cmd /c "del /f /q `"$($child.FullName)`" 2>nul"
+            }
+
+            if (Test-Path -LiteralPath $child.FullName) {
+                Remove-Item -LiteralPath $child.FullName -Recurse -Force -ErrorAction Stop
+            }
+
+            if (-not (Test-Path -LiteralPath $child.FullName)) {
+                $deletedCount++
+            }
+        }
+        catch {
+        }
+    }
+
+    $remaining = @(Get-ChildItem -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue)
+    $scheduled = $null
+    if ($remaining.Count -gt 0) {
+        Write-Host "  ⚠️ $($remaining.Count) item(s) remained locked. Scheduling them for next reboot..." -ForegroundColor Yellow
+        $scheduled = Schedule-PathsForDeletionOnReboot -Paths $remaining.FullName
+    }
+
+    Write-Host "`n  Starting services..." -ForegroundColor Yellow
+    Start-UpdateServices -ServiceNames $coreServices
+
+    $afterSizeMB = Get-DirectorySizeMB -Path $downloadPath
+    $freedMB = [math]::Round([math]::Max(0, $beforeSizeMB - $afterSizeMB), 1)
+
+    Write-Host ""
+    if ($coreStopped) {
+        Write-Host "  ✅ Live SoftwareDistribution cleanup finished." -ForegroundColor Green
+    }
+    else {
+        Write-Host "  ⚠️ Live cleanup finished with service-stop warnings." -ForegroundColor Yellow
+    }
+    Write-Host "     Before: $beforeSizeMB MB" -ForegroundColor DarkGray
+    Write-Host "     After:  $afterSizeMB MB" -ForegroundColor DarkGray
+    Write-Host "     Freed:  $freedMB MB" -ForegroundColor DarkGray
+
+    if ($deletedCount -gt 0) {
+        Write-Host "  ✅ Deleted $deletedCount item(s) immediately." -ForegroundColor Green
+    }
+
+    if ($scheduled) {
+        $scheduledTotal = $scheduled.ScheduledFiles + $scheduled.ScheduledDirectories
+        if ($scheduledTotal -gt 0) {
+            Write-Host "  💡 Scheduled $scheduledTotal leftover item(s) for deletion on next reboot." -ForegroundColor Cyan
+            if ($scheduled.UsedRegistryFallback) {
+                Write-Host "     Registry fallback was needed for some locked paths." -ForegroundColor DarkGray
+            }
+        }
+    }
+
+    Write-Host "  ℹ️ Windows may recreate some files later after scans or new downloads." -ForegroundColor DarkGray
+}
+
 function Move-UpdateCacheFolder {
     param(
         [string]$Path,
@@ -534,9 +744,9 @@ function Reset-UpdateCache {
     Write-Host "  ║   2. After reboot, open this tool again                  ║" -ForegroundColor Cyan
     Write-Host "  ║   3. Use [2] Hide Updates on the fresh update list        ║" -ForegroundColor Cyan
     Write-Host "  ║                                                          ║" -ForegroundColor Cyan
-    Write-Host "  ║  The .old backup folders will be auto-cleaned on the     ║" -ForegroundColor Cyan
-    Write-Host "  ║  next reset, or use [6] to clean them manually.          ║" -ForegroundColor Cyan
-    Write-Host "  ╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+        Write-Host "  ║  The .old backup folders will be auto-cleaned on the     ║" -ForegroundColor Cyan
+        Write-Host "  ║  next reset, or use [7] to clean them manually.          ║" -ForegroundColor Cyan
+        Write-Host "  ╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 }
 
 # ─────────────────────────────────────────────
@@ -789,11 +999,13 @@ while ($menuLoop) {
     Write-Host "         Restore previously hidden updates" -ForegroundColor DarkGray
     Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
     Write-Host "  [5]  Reset Update Cache" -ForegroundColor Red
-    Write-Host "         Clears download cache + old backups" -ForegroundColor DarkGray
-    Write-Host "  [6]  Clean Stale Backup Folders" -ForegroundColor Magenta
+    Write-Host "         Reset SoftwareDistribution + catroot2" -ForegroundColor DarkGray
+    Write-Host "  [6]  Live SoftwareDistribution Cleanup" -ForegroundColor Yellow
+    Write-Host "         Clean live Download cache files" -ForegroundColor DarkGray
+    Write-Host "  [7]  Clean Stale Backup Folders" -ForegroundColor Magenta
     Write-Host "         Remove leftover .old_* folders" -ForegroundColor DarkGray
     Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
-    Write-Host "  [7]  Block Windows 11 Upgrade  " -ForegroundColor Cyan -NoNewline
+    Write-Host "  [8]  Block Windows 11 Upgrade  " -ForegroundColor Cyan -NoNewline
     Write-Host "[$win11Status]" -ForegroundColor $win11StatusColor
     Write-Host "         Pin this PC to Windows 10 via Group Policy" -ForegroundColor DarkGray
     Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
@@ -831,11 +1043,15 @@ while ($menuLoop) {
             Wait-ReturnToMenu
         }
         '6' {
+            Remove-LiveSoftwareDistributionDownload
+            Wait-ReturnToMenu
+        }
+        '7' {
             Write-Host ""
             Remove-StaleOldFolders
             Wait-ReturnToMenu
         }
-        '7' {
+        '8' {
             Toggle-Win11Block
             Wait-ReturnToMenu
         }

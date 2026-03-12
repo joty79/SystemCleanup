@@ -19,7 +19,7 @@
 |:-:|------|-------------|
 | 🔧 | **[Full Cleanup](#-full-cleanup)** | SFC → DISM → WinSxS Temp cleanup in a single automated flow |
 | ⚡ | **[InFlight Cleanup](#-inflight-cleanup)** | Quick-clean locked files from `WinSxS\Temp` using `MoveFileEx` |
-| 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, block Win11 upgrade |
+| 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, clean live SoftwareDistribution, block Win11 upgrade |
 | 📦 | **[Installer](#-installation)** | One-command setup with context menu registration and GitHub updates |
 
 ---
@@ -134,6 +134,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\CleanInFlight.ps1 -SilentCaller
 - Windows pushes updates that **fail repeatedly** or aren't relevant (e.g. fake WSL update on non-WSL systems)
 - The only built-in way to hide updates is the **`wushowhide.diagcab`** GUI tool — slow and manual
 - Hiding an update *before* clearing the cache doesn't stick — the flag gets wiped on next cache reset
+- The live `SoftwareDistribution\Download` cache can keep **hundreds of MB** of leftover update packages after monthly updates
 - Cache reset leaves behind **`.old` backup folders** that accumulate and waste disk space
 - Windows 10 machines get **nagged to upgrade to Windows 11** with no easy off switch
 
@@ -153,10 +154,11 @@ A full interactive submenu using the native `Microsoft.Update.Session` COM API �
 │  [3]  Show Hidden Updates                                │
 │  [4]  Unhide Update(s)      ← restore hidden             │
 │  ──────────────────────────────────────────               │
-│  [5]  Reset Update Cache    ← stops services + cleanup    │
-│  [6]  Clean Stale Backups   ← remove .old_* folders       │
+│  [5]  Reset Update Cache    ← reset SoftwareDistribution  │
+│  [6]  Live SoftwareDistribution Cleanup                   │
+│  [7]  Clean Stale Backups   ← remove .old_* folders       │
 │  ──────────────────────────────────────────               │
-│  [7]  Block Windows 11      ← policy active/mismatch/off  │
+│  [8]  Block Windows 11      ← policy active/mismatch/off  │
 │  ──────────────────────────────────────────               │
 │  [ESC] Back to main menu                                 │
 └──────────────────────────────────────────────────────────┘
@@ -185,9 +187,17 @@ If you hide first then reset, the `IsHidden` flag is stored in `SoftwareDistribu
 - Fresh cache folders may be recreated immediately after services restart — that alone does **not** mean the reset failed
 - If the tool reports a partial reset, reboot and run `[5]` again before hiding updates
 
+### Live SoftwareDistribution Cleanup
+
+- Option `[6]` is the **space-recovery** path, not the hide/reset troubleshooting path
+- It stops the update services temporarily and cleans the live `C:\Windows\SoftwareDistribution\Download` cache
+- It intentionally leaves `DataStore` / update history alone, so it is less disruptive than a full cache reset
+- If some files stay locked, the tool schedules those leftovers for deletion on the next reboot
+- Windows may recreate some files later after a new update scan or download — that is normal
+
 ### Block Windows 11 Upgrade
 
-Option `[7]` toggles a Group Policy lock that pins the machine to Windows 10:
+Option `[8]` toggles a Group Policy lock that pins the machine to Windows 10:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -342,7 +352,7 @@ Simply hiding the Windows 11 upgrade via `IsHidden` doesn't survive cache resets
 <details>
 <summary><b>Why single-keypress menu navigation?</b></summary>
 
-The Windows Update Manager uses `ReadKey` instead of `Read-Host` for menu input. This means you press a single key (1–7, X, or ESC) and the action fires immediately — no Enter needed. `ESC` returns to the main SystemCleanup CMD menu instead of closing the tool, making the navigation feel responsive and preventing accidental exits.
+The Windows Update Manager uses `ReadKey` instead of `Read-Host` for menu input. This means you press a single key (1–8, X, or ESC) and the action fires immediately — no Enter needed. `ESC` returns to the main SystemCleanup CMD menu instead of closing the tool, making the navigation feel responsive and preventing accidental exits.
 
 </details>
 
