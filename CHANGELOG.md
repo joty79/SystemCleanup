@@ -37,4 +37,5 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Updated the `wt` launcher so `Full Cleanup` runs the `SFC` and `DISM` stages through `cmd.exe`, preserving the normal native progress display inside Windows Terminal.
 - Fixed `CleanInFlight.ps1` so its empty-folder checks are array-safe under strict PowerShell execution and no longer crash on single-item results with `The property 'Count' cannot be found on this object`.
 - Updated the experimental `wt` branch so main-menu option `[1] Full Cleanup` now opens in a dedicated Windows Terminal split pane backed by `FullCleanup.cmd`, instead of trying to run the whole servicing flow inline in the menu pane.
+- Restyled `FullCleanup.cmd` on the `wt` branch to match the familiar CMD full-cleanup look more closely and fixed its quoted-command dispatch so the split-pane runner executes `SFC` / `DISM` correctly.
 

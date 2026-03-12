@@ -253,3 +253,11 @@
 - Guardrail/rule: On the `wt` branch, when `WT_SESSION` is present, main-menu option `[1] Full Cleanup` should open a dedicated Windows Terminal split pane and run `FullCleanup.cmd` there. Keep the menu pane separate, and keep `FullCleanup.cmd` installer-tracked so installed copies can use the same split-pane flow.
 - Files affected: `SystemCleanup.ps1`, `FullCleanup.cmd`, `Install.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of WT `split-pane` argument flow and installer deploy lists.
+
+### Entry - 2026-03-12 (wt branch: preserve classic Full Cleanup look in split pane)
+- Date: 2026-03-12
+- Problem: The first `FullCleanup.cmd` runner looked visually flatter than the original CMD flow and failed by trying to execute the quoted step title instead of the real `SFC` / `DISM` command.
+- Root cause: The quick split-pane runner used plain `echo` output and a broken `call %*` helper that treated the quoted title as the executable token.
+- Guardrail/rule: On the `wt` branch, `FullCleanup.cmd` should preserve the classic CMD full-cleanup styling as closely as possible and invoke step commands through an explicit command argument (`%~2`), not by replaying the entire raw argument list.
+- Files affected: `FullCleanup.cmd`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: Static review of ANSI styling, batch command dispatch, and log-write guard.
