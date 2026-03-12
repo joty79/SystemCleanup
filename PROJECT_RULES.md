@@ -245,3 +245,11 @@
 - Guardrail/rule: On the `wt` branch, keep the main menu in `SystemCleanup.ps1`, but run `SFC` and `DISM` stages through `cmd.exe` so the classic progress rendering survives inside Windows Terminal. Also keep `CleanInFlight.ps1` array-safe by using `@(...).Count` for empty-folder checks.
 - Files affected: `SystemCleanup.ps1`, `CleanInFlight.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and `CleanInFlight.ps1`; static review of `cmd.exe` native-stage invocation.
+
+### Entry - 2026-03-12 (wt branch: run Full Cleanup in a dedicated WT cmd pane)
+- Date: 2026-03-12
+- Problem: Simply invoking `cmd.exe /c ...` from inside the PowerShell-hosted WT menu was not enough; option `[1]` still behaved like an inline PowerShell run and did not give the intended separate native-servicing view.
+- Root cause: The previous experiment changed the process used for native commands, but not the actual pane host or pane lifecycle.
+- Guardrail/rule: On the `wt` branch, when `WT_SESSION` is present, main-menu option `[1] Full Cleanup` should open a dedicated Windows Terminal split pane and run `FullCleanup.cmd` there. Keep the menu pane separate, and keep `FullCleanup.cmd` installer-tracked so installed copies can use the same split-pane flow.
+- Files affected: `SystemCleanup.ps1`, `FullCleanup.cmd`, `Install.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of WT `split-pane` argument flow and installer deploy lists.

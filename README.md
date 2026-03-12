@@ -60,7 +60,7 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 
 Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. After any option completes, the tool **returns to the main menu** — only `ESC` exits the CMD launcher.
 
-On the experimental `wt` branch, the main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing. To preserve the familiar native `% progress` display, the `Full Cleanup` branch runs the `SFC` and `DISM` stages through `cmd.exe` even though the main menu is hosted by PowerShell.
+On the experimental `wt` branch, the main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing. In WT sessions, `Full Cleanup` opens in a dedicated split pane and runs through `cmd.exe`, preserving the familiar native `% progress` display for `SFC` and `DISM`.
 
 ### Usage
 
@@ -327,17 +327,18 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -Action Uninstall -F
 ```
 SystemCleanup/
   ├── SystemCleanup.ps1          # Main menu launcher (PowerShell, prefers Windows Terminal)
+  ├── FullCleanup.cmd           # WT split-pane runner for native SFC/DISM progress
   ├── SystemCleanup.cmd          # Legacy CMD launcher kept for compatibility / branch work
-├── CleanInFlight.ps1          # WinSxS\Temp cleanup with MoveFileEx fallback
-├── ManageUpdates.ps1          # Windows Update Manager + Win11 block (COM API)
-├── Install.ps1                # Installer/updater/uninstaller (InstallerCore)
-├── SystemCleanup.reg          # Static registry sample (manual import)
-├── Reset update services.ps1  # Legacy update services reset script
-├── .gitattributes             # Enforces CRLF for .cmd and .reg files
-├── .gitignore                 # Excludes legacy/test artifacts
-├── CHANGELOG.md               # Notable user-facing changes
-├── PROJECT_RULES.md           # Decision log and project guardrails
-└── README.md                  # You are here
+  ├── CleanInFlight.ps1          # WinSxS\Temp cleanup with MoveFileEx fallback
+  ├── ManageUpdates.ps1          # Windows Update Manager + Win11 block (COM API)
+  ├── Install.ps1                # Installer/updater/uninstaller (InstallerCore)
+  ├── SystemCleanup.reg          # Static registry sample (manual import)
+  ├── Reset update services.ps1  # Legacy update services reset script
+  ├── .gitattributes             # Enforces CRLF for .cmd and .reg files
+  ├── .gitignore                 # Excludes legacy/test artifacts
+  ├── CHANGELOG.md               # Notable user-facing changes
+  ├── PROJECT_RULES.md           # Decision log and project guardrails
+  └── README.md                  # You are here
 ```
 
 ---

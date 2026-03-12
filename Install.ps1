@@ -41,6 +41,7 @@ $script:ProfileJson = @'
   "required_package_entries": [
     "Install.ps1",
     "SystemCleanup.ps1",
+    "FullCleanup.cmd",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
     "ManageUpdates.ps1",
@@ -49,6 +50,7 @@ $script:ProfileJson = @'
   "deploy_entries": [
     "Install.ps1",
     "SystemCleanup.ps1",
+    "FullCleanup.cmd",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
     "ManageUpdates.ps1",
@@ -58,6 +60,7 @@ $script:ProfileJson = @'
   "verify_core_files": [
     "Install.ps1",
     "SystemCleanup.ps1",
+    "FullCleanup.cmd",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
     "ManageUpdates.ps1"

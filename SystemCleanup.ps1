@@ -212,7 +212,48 @@ function Invoke-CmdNativeStep {
     return $exitCode
 }
 
+function Start-FullCleanupInWtPane {
+    if (-not $env:WT_SESSION) {
+        return $false
+    }
+
+    $wtCommand = Get-Command wt.exe -ErrorAction SilentlyContinue
+    if ($null -eq $wtCommand) {
+        return $false
+    }
+
+    $runnerPath = Join-Path $PSScriptRoot 'FullCleanup.cmd'
+    if (-not (Test-Path -LiteralPath $runnerPath)) {
+        return $false
+    }
+
+    $argList = @(
+        '-w', '0',
+        'split-pane',
+        '-V',
+        '--title', 'SystemCleanup Full Cleanup',
+        'cmd.exe',
+        '/k',
+        $runnerPath
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($script:LogFile)) {
+        $argList += $script:LogFile
+    }
+
+    Start-Process -FilePath $wtCommand.Source -ArgumentList $argList | Out-Null
+    return $true
+}
+
 function Invoke-FullCleanup {
+    if (Start-FullCleanupInWtPane) {
+        Write-Host ''
+        Write-Host '  Full Cleanup opened in a Windows Terminal split pane.' -ForegroundColor Green
+        Write-Host '  Run and watch the native progress there. Close that pane when finished.' -ForegroundColor DarkGray
+        Wait-ReturnToMenu
+        return
+    }
+
     Clear-Host
     Write-Host ''
     Write-Host '==========================================' -ForegroundColor Cyan
