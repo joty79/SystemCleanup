@@ -181,3 +181,11 @@
 - Guardrail/rule: Keep every menu color token explicitly defined in `SystemCleanup.cmd`. For the current main menu, use `magenta` for `[4] Windows Update Cleanup` and `blue` for `[5] Windows Update Manager` so adjacent options stay visually distinct.
 - Files affected: `SystemCleanup.cmd`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: Static review of ANSI variable definitions and menu color usage.
+
+### Entry - 2026-03-12 (Use real ESC key for CMD main menu exit)
+- Date: 2026-03-12
+- Problem: The main `SystemCleanup.cmd` launcher still advertised `[X] Close / Cancel`, while the rest of the tool had moved toward `ESC`-based navigation.
+- Root cause: The CMD launcher still used `set /p`, which cannot read a real Escape keypress directly.
+- Guardrail/rule: The main CMD menu should advertise `[ESC] Close / Cancel` and read the actual Escape key through a PowerShell `ReadKey` action, keeping the launcher behavior aligned with the PowerShell submenu navigation.
+- Files affected: `SystemCleanup.cmd`, `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of main-menu key handling.

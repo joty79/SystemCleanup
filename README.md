@@ -57,7 +57,7 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. After any option completes, the tool **returns to the main menu** — only `[X]` exits.
+Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. After any option completes, the tool **returns to the main menu** — only `ESC` exits the CMD launcher.
 
 ### Usage
 

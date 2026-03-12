@@ -26,4 +26,5 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Fixed the main-menu live cache size probe in `SystemCleanup.cmd` so CMD launches the PowerShell one-liner correctly instead of showing a `'pwsh"... is not recognized` quoting error.
 - Replaced the main-menu live cache size one-liner with a dedicated `ManageUpdates.ps1 -Action LiveCleanupStatus` call so CMD no longer breaks on inline PowerShell quoting or string-token parsing.
 - Fixed the main-menu ANSI palette so option `[4]` uses explicit magenta and option `[5]` uses blue instead of both rendering as default white.
+- Changed the main `SystemCleanup.cmd` launcher to show `[ESC] Close / Cancel` and read the actual Escape key via `ManageUpdates.ps1`, instead of showing `[X]` with `set /p`.
 

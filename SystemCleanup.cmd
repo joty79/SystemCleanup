@@ -79,14 +79,16 @@ echo.
 echo    %cBlue%[ 5 ]%cReset% Windows Update Manager
 echo          %cGray%Hide/unhide/list updates, reset cache, block Win11%cReset%
 echo.
-echo    %cRed%[ X ]%cReset% Close / Cancel
+echo    %cRed%[ ESC ]%cReset% Close / Cancel
 echo.
-set /p "CHOICE=  Enter choice (1/2/3/4/5/X): "
+<nul set /p "=  Enter choice (1/2/3/4/5/ESC): "
+for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action ReadMainMenuChoice -SilentCaller') do set "CHOICE=%%a"
 
 if /i "%CHOICE%"=="2" goto :InFlightOnly
 if /i "%CHOICE%"=="3" goto :LiveSoftwareDistribution
 if /i "%CHOICE%"=="4" goto :WindowsUpdateCleanup
 if /i "%CHOICE%"=="5" goto :ManageUpdates
+if /i "%CHOICE%"=="ESC" exit /b
 if /i "%CHOICE%"=="X" exit /b
 if "%CHOICE%" NEQ "1" (
     echo  %cRed%Invalid choice.%cReset%

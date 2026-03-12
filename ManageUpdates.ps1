@@ -4,7 +4,7 @@
 
 param(
     [switch]$SilentCaller,
-    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus')]
+    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus', 'ReadMainMenuChoice')]
     [string]$Action = 'Menu'
 )
 
@@ -1170,6 +1170,25 @@ function Toggle-Win11Block {
 # ─────────────────────────────────────────────
 $directActionCompleted = $false
 switch ($Action) {
+    'ReadMainMenuChoice' {
+        $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+        if ($key.VirtualKeyCode -eq 27) {
+            Write-Host 'ESC'
+            Write-Output 'ESC'
+            return
+        }
+
+        $char = [string]$key.Character
+        if (-not [string]::IsNullOrWhiteSpace($char)) {
+            Write-Host $char
+            Write-Output $char
+        }
+        else {
+            Write-Host ''
+            Write-Output ''
+        }
+        return
+    }
     'LiveCleanupStatus' {
         Write-Output (Get-LiveDownloadCacheStatusLine)
         return
