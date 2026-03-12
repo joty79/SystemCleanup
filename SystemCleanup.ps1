@@ -231,7 +231,6 @@ function Start-FullCleanupInWtPane {
         '-w', '0',
         'split-pane',
         '-V',
-        '--title', 'SystemCleanup Full Cleanup',
         'cmd.exe',
         '/k',
         $runnerPath
