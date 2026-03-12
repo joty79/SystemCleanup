@@ -411,6 +411,27 @@ function Unhide-SelectedUpdates {
 # ─────────────────────────────────────────────
 # 🔵 HELPER: Clean stale .old backup folders
 # ─────────────────────────────────────────────
+function Get-StaleOldFoldersStatusLine {
+    $sdParent = 'C:\Windows'
+    $crParent = 'C:\Windows\System32'
+    $sdOldDirs = @(Get-ChildItem -Path $sdParent -Directory -Filter 'SoftwareDistribution.old*' -ErrorAction SilentlyContinue)
+    $crOldDirs = @(Get-ChildItem -Path $crParent -Directory -Filter 'catroot2.old*' -ErrorAction SilentlyContinue)
+    $allOld = @()
+    if ($sdOldDirs.Count -gt 0) { $allOld += $sdOldDirs }
+    if ($crOldDirs.Count -gt 0) { $allOld += $crOldDirs }
+
+    if ($allOld.Count -eq 0) {
+        return 'No .old_* folders found'
+    }
+
+    $totalSizeMB = 0
+    foreach ($d in $allOld) {
+        $totalSizeMB += (Get-DirectorySizeMB -Path $d.FullName)
+    }
+
+    return ('{0} folder(s) found ({1} MB)' -f $allOld.Count, $totalSizeMB)
+}
+
 function Remove-StaleOldFolders {
     param([switch]$Silent)
     $sdParent = 'C:\Windows'
@@ -678,6 +699,54 @@ function Restore-IsolatedUpdateCleanupSlot {
     }
 }
 
+function Ensure-SetForegroundWindowApi {
+    if ('Win32.CleanMgrFocus' -as [type]) {
+        return [Win32.CleanMgrFocus]
+    }
+
+    $signature = @'
+[DllImport("user32.dll")]
+[return: MarshalAs(UnmanagedType.Bool)]
+public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+[DllImport("user32.dll")]
+[return: MarshalAs(UnmanagedType.Bool)]
+public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+'@
+
+    return Add-Type -MemberDefinition $signature -Name 'CleanMgrFocus' -Namespace 'Win32' -PassThru
+}
+
+function Invoke-CleanMgrWindowActivation {
+    param(
+        [int[]]$BaselineIds = @(),
+        [string]$DebugLogPath = ''
+    )
+
+    $api = Ensure-SetForegroundWindowApi
+    $activated = [System.Collections.Generic.HashSet[int]]::new()
+
+    foreach ($proc in @(Get-Process -Name cleanmgr -ErrorAction SilentlyContinue)) {
+        $procId = $proc.Id
+        if (@($BaselineIds) -contains $procId) { continue }
+        if ($activated.Contains($procId)) { continue }
+
+        $hwnd = $proc.MainWindowHandle
+        if ($hwnd -eq [IntPtr]::Zero) { continue }
+
+        # SW_SHOW = 5, SW_RESTORE = 9
+        $null = $api::ShowWindow($hwnd, 9)
+        $null = $api::SetForegroundWindow($hwnd)
+        [void]$activated.Add($procId)
+
+        Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message (
+            "Activated cleanmgr window: PID={0} hWnd=0x{1:X} Title='{2}'" -f $procId, $hwnd.ToInt64(), $proc.MainWindowTitle
+        )
+    }
+
+    return $activated.Count
+}
+
 function Invoke-IsolatedWindowsUpdateCleanup {
     param(
         [int]$Slot = 88,
@@ -700,29 +769,16 @@ function Invoke-IsolatedWindowsUpdateCleanup {
         $slotState = Set-IsolatedUpdateCleanupSlot -Slot $Slot
         Write-StructuredDebugBlock -Path $DebugLogPath -Title 'StateFlags after isolate' -Rows (Get-VolumeCachesSlotSnapshot -Slot $Slot)
 
-        $launchMode = 'DirectHidden'
-        if (-not [string]::IsNullOrWhiteSpace($env:WT_SESSION)) {
-            $launchMode = 'ExternalCmd'
-            $cmdExe = if (-not [string]::IsNullOrWhiteSpace($env:ComSpec)) { $env:ComSpec } else { (Join-Path $env:SystemRoot 'System32\cmd.exe') }
-            $cmdArgs = @('/d', '/c', "`"$cleanMgrPath`" /sagerun:$Slot")
-            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message ("Launching cleanmgr via external cmd window: {0} {1}" -f $cmdExe, ($cmdArgs -join ' '))
-            $process = Start-Process -FilePath $cmdExe -ArgumentList $cmdArgs -PassThru -Environment @{
-                WT_SESSION = ''
-                WT_PROFILE_ID = ''
-                WT_PANE = ''
-                WT_TAB_ID = ''
-            }
-            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Started cmd wrapper PID=$($process.Id) Mode=$launchMode"
-        }
-        else {
-            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Launching cleanmgr directly in non-WT session."
-            $process = Start-Process -FilePath $cleanMgrPath -ArgumentList "/sagerun:$Slot" -WindowStyle Hidden -PassThru
-            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Started cleanmgr PID=$($process.Id) Mode=$launchMode"
-        }
+        # Always launch cleanmgr directly — no external cmd window
+        Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Launching cleanmgr directly."
+        $process = Start-Process -FilePath $cleanMgrPath -ArgumentList "/sagerun:$Slot" -PassThru
+        Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Started cleanmgr PID=$($process.Id)"
 
         $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
         $nextHeartbeatSeconds = 5
         $seenNewCleanMgrIds = [System.Collections.Generic.HashSet[int]]::new()
+        $activationAttempted = $false
+
         while (-not $process.HasExited) {
             Start-Sleep -Seconds 1
             try { $process.Refresh() } catch {}
@@ -734,20 +790,95 @@ function Invoke-IsolatedWindowsUpdateCleanup {
                 }
             }
 
+            # After 2 seconds, try to auto-activate/focus any cleanmgr windows
+            # so the GUI starts processing immediately instead of hanging
+            if (-not $activationAttempted -and $stopwatch.Elapsed.TotalSeconds -ge 2) {
+                $activated = Invoke-CleanMgrWindowActivation -BaselineIds $baselineCleanMgrIds -DebugLogPath $DebugLogPath
+                if ($activated -gt 0) {
+                    $activationAttempted = $true
+                }
+            }
+
             if ($stopwatch.Elapsed.TotalSeconds -ge $nextHeartbeatSeconds) {
-                Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message ("Heartbeat: launcher PID={0} Mode={1} alive after {2:N0}s" -f $process.Id, $launchMode, $stopwatch.Elapsed.TotalSeconds)
+                Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message ("Heartbeat: PID={0} alive after {1:N0}s" -f $process.Id, $stopwatch.Elapsed.TotalSeconds)
                 Write-StructuredDebugBlock -Path $DebugLogPath -Title 'cleanmgr processes heartbeat' -Rows (Get-CleanMgrProcessSnapshot)
+
+                # Retry activation on each heartbeat in case the window appeared late
+                if (-not $activationAttempted) {
+                    $activated = Invoke-CleanMgrWindowActivation -BaselineIds $baselineCleanMgrIds -DebugLogPath $DebugLogPath
+                    if ($activated -gt 0) {
+                        $activationAttempted = $true
+                    }
+                }
+
                 $nextHeartbeatSeconds += 5
             }
         }
 
-        if ($launchMode -eq 'ExternalCmd') {
-            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Cmd wrapper exited. PID=$($process.Id) ExitCode=$($process.ExitCode)"
-        }
-        else {
-            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Primary cleanmgr process exited. PID=$($process.Id) ExitCode=$($process.ExitCode)"
-        }
+        Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message "Primary cleanmgr process exited. PID=$($process.Id) ExitCode=$($process.ExitCode)"
         Write-StructuredDebugBlock -Path $DebugLogPath -Title 'cleanmgr processes after exit' -Rows (Get-CleanMgrProcessSnapshot)
+
+        # ── Wait for any surviving cleanmgr children ──
+        # cleanmgr often detaches: the parent exits immediately but a child
+        # process does the real cleanup work.  We must keep waiting here.
+        $tailMaxSeconds = 600          # 10 min hard cap
+        $tailStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $tailNextHeartbeat = 5
+        $loggedTailStart = $false
+        $tailActivationDone = $false
+
+        while ($tailStopwatch.Elapsed.TotalSeconds -lt $tailMaxSeconds) {
+            $liveCleanMgr = @(Get-CleanMgrProcessSnapshot | Where-Object {
+                $baseline = @($baselineCleanMgrIds)
+                $baseline -notcontains [int]$_.Id
+            })
+
+            if ($liveCleanMgr.Count -eq 0) {
+                break
+            }
+
+            if (-not $loggedTailStart) {
+                Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message (
+                    "Launcher exited but {0} cleanmgr child(ren) still running. Entering tail-wait." -f $liveCleanMgr.Count
+                )
+                $loggedTailStart = $true
+            }
+
+            # Activate child windows too (the detached child is the one with the GUI)
+            if (-not $tailActivationDone -and $tailStopwatch.Elapsed.TotalSeconds -ge 1) {
+                $activated = Invoke-CleanMgrWindowActivation -BaselineIds $baselineCleanMgrIds -DebugLogPath $DebugLogPath
+                if ($activated -gt 0) {
+                    $tailActivationDone = $true
+                }
+            }
+
+            Start-Sleep -Seconds 1
+
+            if ($tailStopwatch.Elapsed.TotalSeconds -ge $tailNextHeartbeat) {
+                Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message (
+                    "Tail-wait heartbeat: {0:N0}s elapsed, {1} cleanmgr process(es) alive" -f $tailStopwatch.Elapsed.TotalSeconds, $liveCleanMgr.Count
+                )
+                Write-StructuredDebugBlock -Path $DebugLogPath -Title 'cleanmgr tail-wait heartbeat' -Rows $liveCleanMgr
+
+                # Retry activation if not done yet
+                if (-not $tailActivationDone) {
+                    $activated = Invoke-CleanMgrWindowActivation -BaselineIds $baselineCleanMgrIds -DebugLogPath $DebugLogPath
+                    if ($activated -gt 0) {
+                        $tailActivationDone = $true
+                    }
+                }
+
+                $tailNextHeartbeat += 10
+            }
+        }
+
+        if ($loggedTailStart) {
+            Write-WindowsUpdateCleanupDebugLog -Path $DebugLogPath -Message (
+                "Tail-wait finished after {0:N0}s" -f $tailStopwatch.Elapsed.TotalSeconds
+            )
+            Write-StructuredDebugBlock -Path $DebugLogPath -Title 'cleanmgr processes after tail-wait' -Rows (Get-CleanMgrProcessSnapshot)
+        }
+
         return [pscustomobject]@{
             ExitCode = $process.ExitCode
             Slot = $Slot
@@ -990,9 +1121,6 @@ function Invoke-WindowsUpdateCleanup {
     }
 
     Write-Host "`n  Running cleanmgr /sagerun:$slot ..." -ForegroundColor Yellow
-    if (-not [string]::IsNullOrWhiteSpace($env:WT_SESSION)) {
-        Write-Host "  Launch mode: external classic cmd window (WT-safe fallback)" -ForegroundColor DarkGray
-    }
     try {
         $runResult = Invoke-IsolatedWindowsUpdateCleanup -Slot $slot -DebugLogPath $debugLogPath
     }
@@ -1431,6 +1559,7 @@ if ($directActionCompleted) {
 
 $menuLoop = $true
 while ($menuLoop) {
+    Clear-Host
     $win11State = Get-Win11BlockState
     $win11Status = switch ($win11State.StatusLabel) {
         'Policy active' { '🟢 Policy active' }
@@ -1462,8 +1591,9 @@ while ($menuLoop) {
     Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
     Write-Host "  [5]  Reset Update Cache" -ForegroundColor Red
     Write-Host "         Reset SoftwareDistribution + catroot2" -ForegroundColor DarkGray
+    $oldFoldersStatus = Get-StaleOldFoldersStatusLine
     Write-Host "  [6]  Clean Stale Backup Folders" -ForegroundColor Magenta
-    Write-Host "         Remove leftover .old_* folders" -ForegroundColor DarkGray
+    Write-Host "         $oldFoldersStatus" -ForegroundColor DarkGray
     Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
     Write-Host "  [7]  Block Windows 11 Upgrade  " -ForegroundColor Cyan -NoNewline
     Write-Host "[$win11Status]" -ForegroundColor $win11StatusColor

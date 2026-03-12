@@ -301,3 +301,11 @@
 - Guardrail/rule: For external `cmd` launches of `cleanmgr`, capture a baseline of existing `cleanmgr` PIDs, log the wrapper PID separately, and record newly observed `cleanmgr` child PIDs via snapshot diff so the troubleshooting log reflects the real process lifecycle.
 - Files affected: `ManageUpdates.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of baseline-vs-child process logging.
+
+### Entry - 2026-03-13 (Direct cleanmgr launch + auto-activation via SetForegroundWindow)
+- Date: 2026-03-13
+- Problem: Option `[4]` Windows Update Cleanup launched `cleanmgr` via an external `cmd` window (WT-safe fallback), but on laptops and older PCs the `cleanmgr` GUI would hang indefinitely until manually clicked/focused. The external `cmd` window was also unwanted visual noise.
+- Root cause: `cleanmgr /sagerun` on some machines spawns a progress dialog that requires window focus/activation before it starts processing. The external cmd wrapper also exited before `cleanmgr` children finished, causing the script to restore the registry slot prematurely.
+- Guardrail/rule: For option `[4]`, always launch `cleanmgr` directly (no external `cmd` wrapper). After launch, use Win32 `SetForegroundWindow` + `ShowWindow(SW_RESTORE)` via P/Invoke to auto-activate any `cleanmgr` GUI windows. After the parent process exits, enter a tail-wait loop that monitors and activates any detached child `cleanmgr` processes. Also: never use `$pid` as a variable name inside helper functions — it is a read-only PowerShell automatic variable.
+- Files affected: `ManageUpdates.ps1`, `PROJECT_RULES.md`
+- Validation/tests run: Live run from WT session confirmed `cleanmgr` completes without manual interaction; debug log verified direct launch + immediate exit when no cleanup needed.
