@@ -232,7 +232,7 @@ function Start-FullCleanupInWtPane {
         'split-pane',
         '-V',
         'cmd.exe',
-        '/k',
+        '/c',
         $runnerPath
     )
 

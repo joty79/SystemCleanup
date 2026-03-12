@@ -261,3 +261,11 @@
 - Guardrail/rule: On the `wt` branch, `FullCleanup.cmd` should preserve the classic CMD full-cleanup styling as closely as possible and invoke step commands through an explicit command argument (`%~2`), not by replaying the entire raw argument list.
 - Files affected: `FullCleanup.cmd`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: Static review of ANSI styling, batch command dispatch, and log-write guard.
+
+### Entry - 2026-03-12 (wt branch: pane should close after final keypress)
+- Date: 2026-03-12
+- Problem: After `Full Cleanup` finished in the WT split pane, pressing a key returned to a plain `C:\...>` prompt instead of closing the pane.
+- Root cause: The pane was launched with `cmd.exe /k`, which keeps the shell open even after `FullCleanup.cmd` exits.
+- Guardrail/rule: For the `wt` branch split-pane full cleanup flow, launch the runner with `cmd.exe /c`, not `/k`, so the pane closes cleanly after the final `pause`/keypress.
+- Files affected: `SystemCleanup.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: Static review of WT split-pane argument list.
