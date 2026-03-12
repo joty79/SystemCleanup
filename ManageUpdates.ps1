@@ -503,6 +503,8 @@ function Schedule-PathsForDeletionOnReboot {
 }
 
 function Remove-LiveSoftwareDistributionDownload {
+    $downloadPath = 'C:\Windows\SoftwareDistribution\Download'
+
     Write-Host "`n  🔵 LIVE SOFTWAREDISTRIBUTION CLEANUP" -ForegroundColor Cyan
     Write-Host "  $('─' * 40)" -ForegroundColor DarkGray
     Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
@@ -515,19 +517,21 @@ function Remove-LiveSoftwareDistributionDownload {
     Write-Host "     For hide/troubleshooting workflow, keep using [5] Reset Update Cache." -ForegroundColor DarkGray
     Write-Host ""
 
+    if (-not (Test-Path -LiteralPath $downloadPath)) {
+        Write-Host "  ℹ️ $downloadPath not found." -ForegroundColor DarkGray
+        return
+    }
+
+    $beforeSizeMB = Get-DirectorySizeMB -Path $downloadPath
+    Write-Host "  Current Download cache size: $beforeSizeMB MB" -ForegroundColor Gray
+    Write-Host ""
+
     $confirm = Read-Host "  Proceed? (Y/N)"
     if ($confirm -notmatch '^[Yy]') {
         Write-Host "  Cancelled." -ForegroundColor DarkGray
         return
     }
 
-    $downloadPath = 'C:\Windows\SoftwareDistribution\Download'
-    if (-not (Test-Path -LiteralPath $downloadPath)) {
-        Write-Host "`n  ℹ️ $downloadPath not found." -ForegroundColor DarkGray
-        return
-    }
-
-    $beforeSizeMB = Get-DirectorySizeMB -Path $downloadPath
     $children = @(Get-ChildItem -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue)
     if ($children.Count -eq 0) {
         Write-Host "`n  Download cache is already empty." -ForegroundColor Green
