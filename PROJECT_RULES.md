@@ -157,3 +157,11 @@
 - Guardrail/rule: Keep post-update cleanup actions in the main `SystemCleanup.cmd` menu: `Live SoftwareDistribution Cleanup` as option `[3]` and `Windows Update Cleanup (Disk Cleanup Utility)` as option `[4]`. Keep `Windows Update Manager` focused on list/hide/unhide, reset cache, stale backup cleanup, and Win11 policy block. The `cleanmgr` action must run via an isolated dedicated slot (`cleanmgr /sagerun:88`) and show `AnalyzeComponentStore` status before and after execution instead of inventing a fake size estimate.
 - Files affected: `SystemCleanup.cmd`, `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of main-menu numbering, isolated `cleanmgr` slot handling, and updated documentation.
+
+### Entry - 2026-03-12 (Fix CMD quoting for live cache size probe)
+- Date: 2026-03-12
+- Problem: Opening the main menu could print `'pwsh" -NoProfile ... is not recognized` before rendering the options, and the gray line for main-menu option `[3]` fell back to the generic text instead of the live size.
+- Root cause: The `for /f` PowerShell probe in `SystemCleanup.cmd` used broken `cmd.exe` quoting with `usebackq` and an embedded quoted executable token.
+- Guardrail/rule: For `cmd.exe` inline PowerShell probes, keep the executable token unquoted when it is a simple command name (`pwsh` / `powershell`), escape pipeline characters with `^|`, and avoid `usebackq` unless it is strictly needed.
+- Files affected: `SystemCleanup.cmd`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: Static review of CMD quoting; `git diff --check`.

@@ -54,7 +54,7 @@ REM ---------------------------------------------------------
 :Menu
 cls
 set "LiveDownloadCacheLine=Clean live Download cache files"
-for /f "usebackq delims=" %%a in (`"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$p='C:\Windows\SoftwareDistribution\Download'; if (-not (Test-Path -LiteralPath $p)) { 'Download cache path not found' } else { $sum=(Get-ChildItem -LiteralPath $p -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum; 'Clean live Download cache files (' + [math]::Round(($sum / 1MB),1) + ' MB)' }"`) do set "LiveDownloadCacheLine=%%a"
+for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -Command "$p='''C:\Windows\SoftwareDistribution\Download'''; if (-not (Test-Path -LiteralPath $p)) { ''Download cache path not found'' } else { $sum=(Get-ChildItem -LiteralPath $p -Recurse -Force -File -ErrorAction SilentlyContinue ^| Measure-Object Length -Sum).Sum; ''Clean live Download cache files ('' + [math]::Round(($sum / 1MB),1) + '' MB)'' }"') do set "LiveDownloadCacheLine=%%a"
 echo.
 echo %cCyan%==========================================%cReset%
 echo    %cBold%  SYSTEM CLEANUP AND REPAIR TOOL%cReset%
