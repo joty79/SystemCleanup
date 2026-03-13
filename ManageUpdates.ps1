@@ -1573,33 +1573,43 @@ while ($menuLoop) {
     }
 
     Write-Host ""
-    Write-Host "  ==========================================" -ForegroundColor Cyan
-    Write-Host "     WINDOWS UPDATE MANAGER" -ForegroundColor White
-    Write-Host "  ==========================================" -ForegroundColor Cyan
+    Write-Host "  ┌──────────────────────────────────────────────────────┐" -ForegroundColor Cyan
+    Write-Host "  │       ⚙️  WINDOWS UPDATE MANAGER                     │" -ForegroundColor Cyan
+    Write-Host "  └──────────────────────────────────────────────────────┘" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  ┌──────────────────────────────────────────────────────┐" -ForegroundColor DarkYellow
-    Write-Host "  │  💡 To permanently hide an update:                  │" -ForegroundColor DarkYellow
-    Write-Host "  │     [5] Reset Cache → Reboot → [2] Hide Updates     │" -ForegroundColor DarkYellow
+    Write-Host "  │  💡 To permanently hide an update:                   │" -ForegroundColor DarkYellow
+    Write-Host "  │     [5] Reset Cache → Reboot → [2] Hide Updates      │" -ForegroundColor DarkYellow
     Write-Host "  └──────────────────────────────────────────────────────┘" -ForegroundColor DarkYellow
     Write-Host ""
-    Write-Host "  [1]  List Pending Updates" -ForegroundColor White
-    Write-Host "  [2]  Hide Update(s)" -ForegroundColor Yellow
-    Write-Host "         Block unwanted updates from appearing" -ForegroundColor DarkGray
-    Write-Host "  [3]  Show Hidden Updates" -ForegroundColor White
-    Write-Host "  [4]  Unhide Update(s)" -ForegroundColor Green
-    Write-Host "         Restore previously hidden updates" -ForegroundColor DarkGray
-    Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
-    Write-Host "  [5]  Reset Update Cache" -ForegroundColor Red
-    Write-Host "         Reset SoftwareDistribution + catroot2" -ForegroundColor DarkGray
+    Write-Host "    📋  UPDATE VISIBILITY" -ForegroundColor White
+    Write-Host "  ──────────────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "    [1]  📋  List Pending Updates" -ForegroundColor White
+    Write-Host "    [2]  🚫  Hide Update(s)" -ForegroundColor Yellow
+    Write-Host "              Block unwanted updates from appearing" -ForegroundColor DarkGray
+    Write-Host "    [3]  👁️   Show Hidden Updates" -ForegroundColor White
+    Write-Host "    [4]  ✅  Unhide Update(s)" -ForegroundColor Green
+    Write-Host "              Restore previously hidden updates" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "    🔧  MAINTENANCE" -ForegroundColor White
+    Write-Host "  ──────────────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "    [5]  💥  Reset Update Cache" -ForegroundColor Red
+    Write-Host "              Reset SoftwareDistribution + catroot2" -ForegroundColor DarkGray
     $oldFoldersStatus = Get-StaleOldFoldersStatusLine
-    Write-Host "  [6]  Clean Stale Backup Folders" -ForegroundColor Magenta
-    Write-Host "         $oldFoldersStatus" -ForegroundColor DarkGray
-    Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
-    Write-Host "  [7]  Block Windows 11 Upgrade  " -ForegroundColor Cyan -NoNewline
+    Write-Host "    [6]  🗑️   Clean Stale Backup Folders" -ForegroundColor Magenta
+    Write-Host "              $oldFoldersStatus" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "    🛡️  POLICY" -ForegroundColor White
+    Write-Host "  ──────────────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "    [7]  🛡️  Block Windows 11 Upgrade  " -ForegroundColor Cyan -NoNewline
     Write-Host "[$win11Status]" -ForegroundColor $win11StatusColor
-    Write-Host "         Pin this PC to Windows 10 via Group Policy" -ForegroundColor DarkGray
-    Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
-    Write-Host "  [ESC] Back to main menu" -ForegroundColor DarkGray
+    Write-Host "              Pin this PC to Windows 10 via Group Policy" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  ──────────────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host "    [ESC]  ↩️  Back to main menu" -ForegroundColor DarkGray
     Write-Host ""
     $choice = Read-MenuKey -Prompt '  Choose'
     

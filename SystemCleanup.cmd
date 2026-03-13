@@ -73,28 +73,38 @@ cls
 set "LiveDownloadCacheLine=Clean live Download cache files"
 for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action LiveCleanupStatus -SilentCaller') do set "LiveDownloadCacheLine=%%a"
 echo.
-echo %cCyan%==========================================%cReset%
-echo    %cBold%  SYSTEM CLEANUP AND REPAIR TOOL%cReset%
-echo %cCyan%==========================================%cReset%
+echo   %cCyan%┌──────────────────────────────────────────────────┐%cReset%
+echo   %cCyan%│                                                  │%cReset%
+echo   %cCyan%│%cReset%       %cBold%SYSTEM CLEANUP %cCyan%^%cReset%%cBold%^& REPAIR TOOL%cReset%             %cCyan%│%cReset%
+echo   %cCyan%│                                                  │%cReset%
+echo   %cCyan%└──────────────────────────────────────────────────┘%cReset%
 echo.
-echo  %cWhite%  Choose an option:%cReset%
+echo   %cWhite%  SYSTEM REPAIR%cReset%
+echo   %cGray%  ────────────────────────────────────────────────%cReset%
 echo.
-echo    %cGreen%[ 1 ]%cReset% Full Cleanup (SFC + DISM + InFlight)
-echo          %cGray%Run SFC, DISM, and WinSxS Temp cleanup%cReset%
+echo     %cGreen%[ 1 ]%cReset%  Full Cleanup %cGray%^(%cReset%SFC + DISM + InFlight%cGray%^)%cReset%
+echo           %cGray%Run SFC, DISM, and WinSxS Temp cleanup%cReset%
 echo.
-echo    %cYellow%[ 2 ]%cReset% InFlight Cleanup Only (MoveFileEx)
-echo          %cGray%Quick — schedules locked files for deletion on reboot%cReset%
+echo     %cYellow%[ 2 ]%cReset%  InFlight Cleanup Only
+echo           %cGray%Quick — schedule locked files for reboot deletion%cReset%
 echo.
-echo    %cCyan%[ 3 ]%cReset% Live SoftwareDistribution Cleanup
-echo          %cGray%!LiveDownloadCacheLine!%cReset%
+echo   %cWhite%  DISK CLEANUP%cReset%
+echo   %cGray%  ────────────────────────────────────────────────%cReset%
 echo.
-echo    %cMagenta%[ 4 ]%cReset% Windows Update Cleanup ^(Disk Cleanup Utility^)
-echo          %cGray%cleanmgr /sagerun:88 ^(best after updates + reboot^)%cReset%
+echo     %cCyan%[ 3 ]%cReset%  Live SoftwareDistribution Cleanup
+echo           %cGray%!LiveDownloadCacheLine!%cReset%
 echo.
-echo    %cBlue%[ 5 ]%cReset% Windows Update Manager
-echo          %cGray%Hide/unhide/list updates, reset cache, block Win11%cReset%
+echo     %cMagenta%[ 4 ]%cReset%  Windows Update Cleanup
+echo           %cGray%cleanmgr /sagerun:88 — best after updates + reboot%cReset%
 echo.
-echo    %cRed%[ ESC ]%cReset% Close / Cancel
+echo   %cWhite%  UPDATE MANAGEMENT%cReset%
+echo   %cGray%  ────────────────────────────────────────────────%cReset%
+echo.
+echo     %cBlue%[ 5 ]%cReset%  Windows Update Manager
+echo           %cGray%Hide/unhide updates, reset cache, block Win11%cReset%
+echo.
+echo   %cGray%  ────────────────────────────────────────────────%cReset%
+echo     %cRed%[ ESC ]%cReset%  Close / Cancel
 echo.
 <nul set /p "=  Enter choice (1/2/3/4/5/ESC): "
 for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action ReadMainMenuChoice -SilentCaller') do set "CHOICE=%%a"
@@ -136,11 +146,11 @@ REM ---------------------------------------------------------
 :FullCleanup
 cls
 echo.
-echo %cCyan%==========================================%cReset%
-echo    %cBold%  FULL SYSTEM CLEANUP%cReset%
-echo %cCyan%==========================================%cReset%
+echo   %cCyan%┌──────────────────────────────────────────────────┐%cReset%
+echo   %cCyan%│%cReset%       %cBold%FULL SYSTEM CLEANUP%cReset%                        %cCyan%│%cReset%
+echo   %cCyan%└──────────────────────────────────────────────────┘%cReset%
 echo.
-echo %cGray%Logs saved to: %LogFile%%cReset%
+echo   %cGray%Logs saved to: %LogFile%%cReset%
 echo.
 
 REM Phase 1: SFC
@@ -163,9 +173,9 @@ call :ResetService
 call :RunStep " SFC (Final Verification)" "sfc /scannow"
 
 echo.
-echo %cGreen%==========================================%cReset%
-echo    %cBold%  ALL STEPS COMPLETED%cReset%
-echo %cGreen%==========================================%cReset%
+echo   %cGreen%┌──────────────────────────────────────────────────┐%cReset%
+echo   %cGreen%│%cReset%       %cBold%ALL STEPS COMPLETED%cReset%                        %cGreen%│%cReset%
+echo   %cGreen%└──────────────────────────────────────────────────┘%cReset%
 echo.
 echo %cYellow% Status Legend:%cReset%
 echo   %cGreen%  +++   OK: No issues found%cReset%             %cGray%(Clean)%cReset%
@@ -181,9 +191,9 @@ REM ---------------------------------------------------------
 :InFlightOnly
 cls
 echo.
-echo %cCyan%==========================================%cReset%
-echo    %cBold%  INFLIGHT CLEANUP (MoveFileEx/Registry)%cReset%
-echo %cCyan%==========================================%cReset%
+echo   %cCyan%┌──────────────────────────────────────────────────┐%cReset%
+echo   %cCyan%│%cReset%       %cBold%INFLIGHT CLEANUP%cReset%                            %cCyan%│%cReset%
+echo   %cCyan%└──────────────────────────────────────────────────┘%cReset%
 echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0CleanInFlight.ps1"
 echo.
@@ -196,9 +206,9 @@ REM ---------------------------------------------------------
 :LiveSoftwareDistribution
 cls
 echo.
-echo %cCyan%==========================================%cReset%
-echo    %cBold%  LIVE SOFTWAREDISTRIBUTION CLEANUP%cReset%
-echo %cCyan%==========================================%cReset%
+echo   %cCyan%┌──────────────────────────────────────────────────┐%cReset%
+echo   %cCyan%│%cReset%       %cBold%LIVE SOFTWAREDISTRIBUTION CLEANUP%cReset%           %cCyan%│%cReset%
+echo   %cCyan%└──────────────────────────────────────────────────┘%cReset%
 echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action LiveCleanup
 echo.
@@ -210,9 +220,9 @@ REM ---------------------------------------------------------
 :WindowsUpdateCleanup
 cls
 echo.
-echo %cCyan%==========================================%cReset%
-echo    %cBold%  WINDOWS UPDATE CLEANUP%cReset%
-echo %cCyan%==========================================%cReset%
+echo   %cCyan%┌──────────────────────────────────────────────────┐%cReset%
+echo   %cCyan%│%cReset%       %cBold%WINDOWS UPDATE CLEANUP%cReset%                      %cCyan%│%cReset%
+echo   %cCyan%└──────────────────────────────────────────────────┘%cReset%
 echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action WindowsUpdateCleanup
 echo.
@@ -224,9 +234,9 @@ REM ---------------------------------------------------------
 :ManageUpdates
 cls
 echo.
-echo %cCyan%==========================================%cReset%
-echo    %cBold%  WINDOWS UPDATE MANAGER%cReset%
-echo %cCyan%==========================================%cReset%
+echo   %cCyan%┌──────────────────────────────────────────────────┐%cReset%
+echo   %cCyan%│%cReset%       %cBold%WINDOWS UPDATE MANAGER%cReset%                      %cCyan%│%cReset%
+echo   %cCyan%└──────────────────────────────────────────────────┘%cReset%
 echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action Menu
 echo.
