@@ -233,7 +233,15 @@ function Show-NativeFailureDetails {
         Write-Host '  Hint: Error 3 / 0x80070003 often means a missing servicing path under WinSxS\Temp\InFlight.' -ForegroundColor DarkYellow
         Write-Host '  Hint: stripped/custom Windows images may fail RestoreHealth even when SFC is clean.' -ForegroundColor DarkYellow
         try {
-            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DismFailureSummary -SilentCaller
+            $summaryLines = @(& (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DismFailureSummary -SilentCaller)
+            if ($summaryLines.Count -gt 0) {
+                foreach ($summaryLine in $summaryLines) {
+                    Write-Host $summaryLine
+                }
+            }
+            else {
+                Write-Host '  Recent servicing log lines: no summary output returned.' -ForegroundColor DarkGray
+            }
         }
         catch {
             Write-Host '  Recent servicing log lines: unavailable.' -ForegroundColor DarkGray
@@ -437,7 +445,15 @@ function Show-DetailedServicingLogs {
     Write-Host ''
 
     try {
-        & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DismFailureSummaryFull -SilentCaller
+        $summaryLines = @(& (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DismFailureSummaryFull -SilentCaller)
+        if ($summaryLines.Count -gt 0) {
+            foreach ($summaryLine in $summaryLines) {
+                Write-Host $summaryLine
+            }
+        }
+        else {
+            Write-Host '  No recent servicing summary lines were returned.' -ForegroundColor DarkGray
+        }
     }
     catch {
         Write-Host '  Unable to read recent servicing log lines.' -ForegroundColor Yellow
