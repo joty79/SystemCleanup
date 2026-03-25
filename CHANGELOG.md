@@ -14,6 +14,7 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Added a short `DISM` / `CBS` log summary to `DISM` failure output so the launcher now surfaces the most relevant recent error lines automatically after a failed servicing step.
 - Refined the `CBS`/`DISM` log summary ranking so missing-path clues such as `InFlight`, `STATUS_OBJECT_PATH_NOT_FOUND`, and `RBDSTAMIL99` are prioritized ahead of low-signal finalize noise.
 - Compressed the automatic `DISM` / `CBS` failure summary into short human-readable clues so the output stays readable inside narrow Windows Terminal split panes.
+<<<<<<< HEAD
 - Added a launcher-level self-update option `[7] Update This Tool (InstallerCore)` that reuses the sibling `Install.ps1` and auto-detects whether to run `DownloadLatest` or `UpdateGitHub`.
 - Added a live updater status probe so the main menu shows the detected InstallerCore update mode directly in the gray description line.
 - Refined the self-update screen to show user-facing InstallerCore defaults as `Installer Mode` / `GitHub branch` or `Local source`, with `Enter` using those defaults and `E` opening the standard `Install.ps1` menu for alternate Local/GitHub/branch choices.
@@ -30,6 +31,13 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Adjusted installed self-update relaunch to use the same context-menu style launch path through a detached helper that clears `WT_SESSION`, so the updated app can reopen correctly in Windows Terminal instead of inheriting the old WT child environment.
 - Refined the WT self-update relaunch again so, when `wt.exe` is available, the updated app opens in a **new Windows Terminal window** (`wt -w new`) instead of appearing as a second tab in the existing WT window.
 - Updated the WT self-update relaunch helper to close the previous WT window after opening the replacement window, so the app relaunch behaves like a real handoff instead of leaving the old terminal behind.
+=======
+- Added a new main-menu option `[5] Last DISM/CBS Failure Details` that shows a wider non-compact servicing log view outside the WT split-pane flow.
+- Added a new main-menu option `[4] Delivery Optimization Cleanup + Disable` with a live status line, cache cleanup, and safe `DODownloadMode = 0` policy application.
+- Added a new main-menu option `[7] Update This Tool (InstallerCore)` that detects repo/installed mode, reuses the remembered Local/GitHub source, and can relaunch the updated tool automatically.
+- Fixed the `wt` self-update handoff for installed copies so the relaunch opens a replacement Windows Terminal window, can optionally restart Explorer without reopening folder windows, and exits the previous launcher loop instead of dropping back to the old main menu.
+- Backported the tested installed-runtime `SystemCleanup.ps1` / `ManageUpdates.ps1` state into the tracked `wt` branch so the repo now matches the working VM behavior.
+>>>>>>> 7e83c0d (Fix WT self-update relaunch handoff and backport live runtime state)
 
 ## [2026-03-10]
 
