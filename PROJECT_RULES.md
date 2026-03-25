@@ -317,3 +317,11 @@
 - Guardrail/rule: In this repo, `Full Cleanup` means `SFC -> DISM AnalyzeComponentStore -> DISM RestoreHealth -> DISM StartComponentCleanup /ResetBase -> CleanInFlight -> final SFC`. Keep `SystemCleanup.cmd`, `FullCleanup.cmd`, `SystemCleanup.ps1`, and the README flow text aligned with that exact sequence. Treat the separate `Windows Update Cleanup (Disk Cleanup Utility)` action as an optional legacy `cleanmgr` path, not the primary component-store cleanup path.
 - Files affected: `SystemCleanup.cmd`, `FullCleanup.cmd`, `SystemCleanup.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of CMD/README sequence alignment.
+
+### Entry - 2026-03-25 (Remove cleanmgr path from the main GUI)
+- Date: 2026-03-25
+- Problem: The main-menu `Windows Update Cleanup (Disk Cleanup Utility)` action remained flaky and random in real use, so keeping it in the visible GUI kept inviting users into an unreliable path we had already decided not to rely on.
+- Root cause: The repo had kept the `cleanmgr /sagerun:88` action exposed in the launcher even after `Full Cleanup` was updated to use the preferred `DISM /ResetBase` servicing path.
+- Guardrail/rule: Do not expose `Windows Update Cleanup (Disk Cleanup Utility)` in the main `SystemCleanup` GUI. The launcher should present only four main options: `Full Cleanup`, `InFlight Cleanup Only`, `Live SoftwareDistribution Cleanup`, and `Windows Update Manager`. If the underlying `cleanmgr` implementation is kept for legacy/debug purposes, keep it non-primary and undocumented in the normal user flow.
+- Files affected: `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of main-menu numbering and README menu references.

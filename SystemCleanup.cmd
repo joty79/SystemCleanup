@@ -88,21 +88,17 @@ echo.
 echo    %cCyan%[ 3 ]%cReset% Live SoftwareDistribution Cleanup
 echo          %cGray%!LiveDownloadCacheLine!%cReset%
 echo.
-echo    %cMagenta%[ 4 ]%cReset% Windows Update Cleanup ^(Disk Cleanup Utility^)
-echo          %cGray%cleanmgr /sagerun:88 ^(best after updates + reboot^)%cReset%
-echo.
-echo    %cBlue%[ 5 ]%cReset% Windows Update Manager
+echo    %cBlue%[ 4 ]%cReset% Windows Update Manager
 echo          %cGray%Hide/unhide/list updates, reset cache, block Win11%cReset%
 echo.
 echo    %cRed%[ ESC ]%cReset% Close / Cancel
 echo.
-<nul set /p "=  Enter choice (1/2/3/4/5/ESC): "
+<nul set /p "=  Enter choice (1/2/3/4/ESC): "
 for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action ReadMainMenuChoice -SilentCaller') do set "CHOICE=%%a"
 
 if /i "%CHOICE%"=="2" goto :InFlightOnly
 if /i "%CHOICE%"=="3" goto :LiveSoftwareDistribution
-if /i "%CHOICE%"=="4" goto :WindowsUpdateCleanup
-if /i "%CHOICE%"=="5" goto :ManageUpdates
+if /i "%CHOICE%"=="4" goto :ManageUpdates
 if /i "%CHOICE%"=="ESC" exit /b
 if /i "%CHOICE%"=="X" exit /b
 if "%CHOICE%" NEQ "1" (
@@ -205,21 +201,7 @@ echo.
 goto :Menu
 
 REM ---------------------------------------------------------
-REM OPTION 4: Windows Update Cleanup (Disk Cleanup Utility)
-REM ---------------------------------------------------------
-:WindowsUpdateCleanup
-cls
-echo.
-echo %cCyan%==========================================%cReset%
-echo    %cBold%  WINDOWS UPDATE CLEANUP%cReset%
-echo %cCyan%==========================================%cReset%
-echo.
-"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action WindowsUpdateCleanup
-echo.
-goto :Menu
-
-REM ---------------------------------------------------------
-REM OPTION 5: Windows Update Manager
+REM OPTION 4: Windows Update Manager
 REM ---------------------------------------------------------
 :ManageUpdates
 cls

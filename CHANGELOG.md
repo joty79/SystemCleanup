@@ -7,7 +7,9 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 ### Changed
 
 - Updated all `Full Cleanup` runtime paths to run `dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase` instead of the plain `StartComponentCleanup` pass.
-- Clarified in the README that `Full Cleanup` now includes the aggressive `DISM /ResetBase` servicing step, while the separate `Windows Update Cleanup` option remains an optional legacy `cleanmgr /sagerun:88` path.
+- Removed the flaky main-menu `Windows Update Cleanup (Disk Cleanup Utility)` GUI entry so the launcher no longer exposes the unreliable `cleanmgr /sagerun:88` path.
+- Moved `Windows Update Manager` up to main-menu option `[4]` after removing the `cleanmgr` GUI entry.
+- Updated the README to stop advertising the removed `Windows Update Cleanup` main-menu path and to reflect the new main-menu numbering.
 
 ## [2026-03-10]
 

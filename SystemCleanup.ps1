@@ -118,7 +118,7 @@ function Write-Log {
 }
 
 function Read-MainMenuKey {
-    Write-Host '  Enter choice (1/2/3/4/5/ESC): ' -ForegroundColor White -NoNewline
+    Write-Host '  Enter choice (1/2/3/4/ESC): ' -ForegroundColor White -NoNewline
     $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     if ($key.VirtualKeyCode -eq 27) {
         Write-Host 'ESC' -ForegroundColor DarkGray
@@ -323,10 +323,7 @@ function Show-MainMenu {
     Write-Host '   [ 3 ] Live SoftwareDistribution Cleanup' -ForegroundColor Cyan
     Write-Host "         $liveDownloadCacheLine" -ForegroundColor DarkGray
     Write-Host ''
-    Write-Host '   [ 4 ] Windows Update Cleanup (Disk Cleanup Utility)' -ForegroundColor Magenta
-    Write-Host '         cleanmgr /sagerun:88 (best after updates + reboot)' -ForegroundColor DarkGray
-    Write-Host ''
-    Write-Host '   [ 5 ] Windows Update Manager' -ForegroundColor Blue
+    Write-Host '   [ 4 ] Windows Update Manager' -ForegroundColor Blue
     Write-Host '         Hide/unhide/list updates, reset cache, block Win11' -ForegroundColor DarkGray
     Write-Host ''
     Write-Host '   [ ESC ] Close / Cancel' -ForegroundColor Red
@@ -358,11 +355,6 @@ while ($true) {
             continue
         }
         '^4$' {
-            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action WindowsUpdateCleanup -SilentCaller
-            Wait-ReturnToMenu
-            continue
-        }
-        '^5$' {
             & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action Menu -SilentCaller
             continue
         }

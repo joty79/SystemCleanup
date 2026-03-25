@@ -20,7 +20,6 @@
 | 🔧 | **[Full Cleanup](#-full-cleanup)** | SFC → DISM `/ResetBase` → WinSxS Temp cleanup in a single automated flow |
 | ⚡ | **[InFlight Cleanup](#-inflight-cleanup)** | Quick-clean locked files from `WinSxS\Temp` using `MoveFileEx` |
 | 💾 | **[Live SoftwareDistribution Cleanup](#-live-softwaredistribution-cleanup)** | Clean the live `SoftwareDistribution\Download` cache without resetting update history |
-| 🧹 | **[Windows Update Cleanup](#-windows-update-cleanup-disk-cleanup-utility)** | Optional legacy `cleanmgr /sagerun:88` pass for extra post-update cleanup/troubleshooting |
 | 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, clean stale backups, block Win11 upgrade |
 | 📦 | **[Installer](#-installation)** | One-command setup with context menu registration and GitHub updates |
 
@@ -151,31 +150,6 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\CleanInFlight.ps1 -SilentCaller
 
 ---
 
-## 🧹 Windows Update Cleanup (Disk Cleanup Utility)
-
-> Optional legacy post-update cleanup for superseded WinSxS / component-store update leftovers using the built-in Disk Cleanup Utility.
-
-- Main menu option `[4]`
-- Runs an isolated `Disk Cleanup Utility` task:
-
-```cmd
-cleanmgr /sagerun:88
-```
-
-- Targets the same general component-store cleanup family as the Disk Cleanup GUI
-- Leaves the live `SoftwareDistribution` cache alone
-- May also scavenge `C:\Windows\WinSxS\Temp\PendingDeletes`
-- Before and after the run, the tool shows `Reclaimable packages`, `Backups and Disabled Features`, and `Cleanup recommended`
-- Writes a dedicated debug log under `%LOCALAPPDATA%\SystemCleanupContext\logs` so machine-specific `cleanmgr` / slot issues can be diagnosed without enabling verbose logging for the whole tool
-- On the experimental `wt` branch, the cleanup now launches `cleanmgr` directly and auto-activates its GUI window when needed, so the first-run WT focus stall no longer requires a manual click
-- `Full Cleanup` already performs the more reliable `DISM StartComponentCleanup /ResetBase` servicing pass, so option `[4]` is mainly kept as a separate `cleanmgr` path when you explicitly want that legacy tool
-
-**Best used:** after Windows Updates are installed and the PC has rebooted.
-
-**From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 4*
-
----
-
 ## 🔄 Windows Update Manager
 
 > Hide unwanted Windows Updates, block Windows 11 upgrades, and reset the update cache — all using the native COM API, no external tools needed.
@@ -268,7 +242,7 @@ The tool pins the machine to **Windows 10 22H2**, which is the final Windows 10 
 
 ### Usage
 
-**From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 5*
+**From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 4*
 
 **From terminal:**
 
