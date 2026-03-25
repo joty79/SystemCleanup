@@ -773,16 +773,30 @@ function Start-SystemCleanupLauncherRelaunch {
 
     $pwshCmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue
     $pwshExe = if ($null -ne $pwshCmd) { $pwshCmd.Source } else { Join-Path $PSHOME 'pwsh.exe' }
+    $wtCmd = Get-Command wt.exe -ErrorAction SilentlyContinue
+    $wtExe = if ($null -ne $wtCmd) { $wtCmd.Source } else { '' }
     $launcherDir = Split-Path -Path $LauncherScriptPath -Parent
     $helperPath = Join-Path $env:TEMP ("SystemCleanup_relaunch_{0}.cmd" -f [guid]::NewGuid().ToString('N'))
-    $helperContent = @(
+    $helperContent = [System.Collections.Generic.List[string]]::new()
+    [void]$helperContent.AddRange(@(
         '@echo off',
         'setlocal',
         'timeout /t 2 /nobreak >nul',
-        'set "WT_SESSION="',
-        ('start "" "{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}"' -f $pwshExe, $LauncherScriptPath),
-        'del "%~f0"'
-    )
+        'set "WT_SESSION="'
+    ))
+
+    if (-not [string]::IsNullOrWhiteSpace($wtExe)) {
+        [void]$helperContent.Add(
+            ('start "" "{0}" -w new new-tab "{1}" -NoProfile -ExecutionPolicy Bypass -File "{2}" -WtHosted' -f $wtExe, $pwshExe, $LauncherScriptPath)
+        )
+    }
+    else {
+        [void]$helperContent.Add(
+            ('start "" "{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}"' -f $pwshExe, $LauncherScriptPath)
+        )
+    }
+
+    [void]$helperContent.Add('del "%~f0"')
 
     try {
         Set-Content -LiteralPath $helperPath -Value $helperContent -Encoding ASCII -ErrorAction Stop

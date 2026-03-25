@@ -28,6 +28,7 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Tightened the servicing-summary selector so menu `[6]` ignores common noisy `DISM` `EnumeratePathEx / FindFirstFile failed` setup probes and scans deeper into `CBS.log`, making root-cause clues more likely to appear than generic source-noise lines.
 - Changed app-driven installed self-updates to skip the old Explorer-folder reopen path and, after a successful installed update, ask whether to relaunch only the app (`Enter`) or relaunch the app plus restart Explorer without reopening a folder window.
 - Adjusted installed self-update relaunch to use the same context-menu style launch path through a detached helper that clears `WT_SESSION`, so the updated app can reopen correctly in Windows Terminal instead of inheriting the old WT child environment.
+- Refined the WT self-update relaunch again so, when `wt.exe` is available, the updated app opens in a **new Windows Terminal window** (`wt -w new`) instead of appearing as a second tab in the existing WT window.
 
 ## [2026-03-10]
 
