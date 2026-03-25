@@ -4,7 +4,7 @@
 
 param(
     [switch]$SilentCaller,
-    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus', 'ReadMainMenuChoice', 'DismFailureSummary', 'DismFailureSummaryFull')]
+    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus', 'DeliveryOptimizationCleanup', 'DeliveryOptimizationStatus', 'ReadMainMenuChoice', 'DismFailureSummary', 'DismFailureSummaryFull')]
     [string]$Action = 'Menu'
 )
 
@@ -401,6 +401,294 @@ function Get-LiveDownloadCacheStatusLine {
 
     $sizeMB = Get-DirectorySizeMB -Path $downloadPath
     return "Clean live Download cache files ($sizeMB MB)"
+}
+
+function Format-ByteSize {
+    param([double]$Bytes)
+
+    if ($Bytes -ge 1GB) {
+        return ('{0} GB' -f [math]::Round(($Bytes / 1GB), 2))
+    }
+
+    if ($Bytes -ge 1MB) {
+        return ('{0} MB' -f [math]::Round(($Bytes / 1MB), 1))
+    }
+
+    if ($Bytes -ge 1KB) {
+        return ('{0} KB' -f [math]::Round(($Bytes / 1KB), 1))
+    }
+
+    return ('{0} B' -f [math]::Round($Bytes, 0))
+}
+
+function Get-DeliveryOptimizationState {
+    $state = [ordered]@{
+        IsAvailable = $false
+        StatusLabel = 'Unavailable'
+        IsDisabled = $false
+        DownloadMode = 'Unknown'
+        DownloadModeProvider = 'Unavailable'
+        WorkingDirectory = ''
+        CacheSizeBytes = 0
+        CacheSizeLabel = '0 B'
+        Files = 0
+        PolicyDownloadMode = $null
+        PolicyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization'
+        Note = ''
+    }
+
+    $config = $null
+    $perf = $null
+    try {
+        $config = Get-DOConfig -Verbose 4>$null
+    }
+    catch {}
+
+    try {
+        $perf = Get-DeliveryOptimizationPerfSnap
+    }
+    catch {}
+
+    if ($null -ne $config -or $null -ne $perf) {
+        $state.IsAvailable = $true
+    }
+
+    if ($null -ne $config) {
+        if ($config.PSObject.Properties['DownloadMode']) {
+            $state.DownloadMode = [string]$config.DownloadMode
+        }
+        if ($config.PSObject.Properties['DownloadModeProvider']) {
+            $state.DownloadModeProvider = [string]$config.DownloadModeProvider
+        }
+        if ($config.PSObject.Properties['WorkingDirectory']) {
+            $state.WorkingDirectory = [string]$config.WorkingDirectory
+        }
+    }
+
+    if ($null -ne $perf) {
+        if ($perf.PSObject.Properties['CacheSizeBytes'] -and $null -ne $perf.CacheSizeBytes) {
+            $state.CacheSizeBytes = [double]$perf.CacheSizeBytes
+        }
+        if ($perf.PSObject.Properties['Files'] -and $null -ne $perf.Files) {
+            $state.Files = [int]$perf.Files
+        }
+        if ($state.DownloadMode -eq 'Unknown' -and $perf.PSObject.Properties['DownloadMode']) {
+            $state.DownloadMode = [string]$perf.DownloadMode
+        }
+    }
+
+    $canInspectWorkingDirectory = $false
+    if (-not [string]::IsNullOrWhiteSpace($state.WorkingDirectory)) {
+        try {
+            $canInspectWorkingDirectory = Test-Path -LiteralPath $state.WorkingDirectory -ErrorAction Stop
+        }
+        catch {
+            $canInspectWorkingDirectory = $false
+        }
+    }
+
+    if ($state.CacheSizeBytes -eq 0 -and $canInspectWorkingDirectory) {
+        try {
+            $state.CacheSizeBytes = [double](
+                Get-ChildItem -LiteralPath $state.WorkingDirectory -Recurse -File -Force -ErrorAction SilentlyContinue |
+                    Measure-Object -Property Length -Sum |
+                    Select-Object -ExpandProperty Sum
+            )
+        }
+        catch {}
+    }
+
+    try {
+        $policyProps = Get-ItemProperty -Path $state.PolicyPath -Name 'DODownloadMode' -ErrorAction Stop
+        if ($policyProps.PSObject.Properties['DODownloadMode']) {
+            $state.PolicyDownloadMode = [int]$policyProps.DODownloadMode
+        }
+    }
+    catch {}
+
+    $state.CacheSizeLabel = Format-ByteSize -Bytes $state.CacheSizeBytes
+
+    $disabledModes = @('CdnOnly', 'Simple', 'Bypass')
+    if ($disabledModes -contains $state.DownloadMode) {
+        $state.IsDisabled = $true
+        $state.StatusLabel = 'Disabled'
+    }
+    elseif (@('Lan', 'Group', 'Internet') -contains $state.DownloadMode) {
+        $state.IsDisabled = $false
+        $state.StatusLabel = 'Enabled'
+    }
+    elseif ($state.PolicyDownloadMode -eq 0) {
+        $state.IsDisabled = $true
+        $state.StatusLabel = 'Disabled'
+        if ($state.DownloadMode -eq 'Unknown') {
+            $state.DownloadMode = 'CdnOnly'
+        }
+    }
+    elseif ($state.IsAvailable) {
+        $state.StatusLabel = 'Unknown'
+    }
+
+    if ($state.IsDisabled -and $state.PolicyDownloadMode -eq 0) {
+        $state.Note = 'Policy enforces CdnOnly'
+    }
+    elseif ($state.IsDisabled) {
+        $state.Note = 'Peer sharing appears off'
+    }
+    elseif ($state.StatusLabel -eq 'Enabled') {
+        $state.Note = 'Peer sharing is allowed'
+    }
+
+    return [pscustomobject]$state
+}
+
+function Get-DeliveryOptimizationStatusLine {
+    $state = Get-DeliveryOptimizationState
+    if (-not $state.IsAvailable) {
+        return 'Delivery Optimization status unavailable'
+    }
+
+    if ($state.IsDisabled) {
+        return ('Disabled ({0}) • Cache {1}' -f $state.DownloadMode, $state.CacheSizeLabel)
+    }
+
+    if ($state.StatusLabel -eq 'Enabled') {
+        return ('Enabled ({0}) • Cache {1}' -f $state.DownloadMode, $state.CacheSizeLabel)
+    }
+
+    return ('Status {0} • Cache {1}' -f $state.DownloadMode, $state.CacheSizeLabel)
+}
+
+function Set-DeliveryOptimizationDownloadModePolicy {
+    param([int]$Mode = 0)
+
+    $policyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization'
+    if (-not (Test-Path -LiteralPath $policyPath)) {
+        New-Item -Path $policyPath -Force -ErrorAction Stop | Out-Null
+    }
+
+    New-ItemProperty -Path $policyPath -Name 'DODownloadMode' -PropertyType DWord -Value $Mode -Force -ErrorAction Stop | Out-Null
+
+    $readBack = Get-ItemProperty -Path $policyPath -Name 'DODownloadMode' -ErrorAction Stop
+    if (-not $readBack.PSObject.Properties['DODownloadMode'] -or [int]$readBack.DODownloadMode -ne $Mode) {
+        throw "Failed to verify DODownloadMode=$Mode."
+    }
+}
+
+function Refresh-DeliveryOptimizationService {
+    $serviceName = 'DoSvc'
+    $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($null -eq $svc) {
+        return $false
+    }
+
+    try {
+        if ($svc.Status -eq 'Running') {
+            Restart-Service -Name $serviceName -Force -ErrorAction Stop
+        }
+        else {
+            Start-Service -Name $serviceName -ErrorAction Stop
+        }
+        return (Wait-ServiceState -Name $serviceName -DesiredStatus 'Running' -TimeoutSeconds 15)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Invoke-DeliveryOptimizationCleanupAndDisable {
+    $before = Get-DeliveryOptimizationState
+
+    Write-Host "`n  🔵 DELIVERY OPTIMIZATION CLEANUP + DISABLE" -ForegroundColor Cyan
+    Write-Host "  $('─' * 44)" -ForegroundColor DarkGray
+    Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
+    Write-Host "      • Clear Delivery Optimization cache with Delete-DeliveryOptimizationCache" -ForegroundColor Gray
+    Write-Host "      • Force DownloadMode = 0 (CdnOnly) to disable peer-to-peer sharing safely" -ForegroundColor Gray
+    Write-Host "      • Keep Windows Update / Store downloads working from Microsoft/CDN" -ForegroundColor Gray
+    Write-Host "      • Try to refresh the Delivery Optimization service" -ForegroundColor Gray
+    Write-Host ""
+
+    if (-not $before.IsAvailable) {
+        Write-Host "  ⚠️ Delivery Optimization cmdlets are unavailable on this machine." -ForegroundColor Red
+        return
+    }
+
+    Write-Host "  Current status: " -ForegroundColor White -NoNewline
+    if ($before.IsDisabled) {
+        Write-Host "DISABLED ✅" -ForegroundColor Green
+    }
+    elseif ($before.StatusLabel -eq 'Enabled') {
+        Write-Host "ENABLED ⚠️" -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "UNKNOWN ⚠️" -ForegroundColor Yellow
+    }
+    Write-Host "      Mode:          $($before.DownloadMode)" -ForegroundColor DarkGray
+    Write-Host "      Provider:      $($before.DownloadModeProvider)" -ForegroundColor DarkGray
+    Write-Host "      Cache size:    $($before.CacheSizeLabel)" -ForegroundColor DarkGray
+    Write-Host "      Cache files:   $($before.Files)" -ForegroundColor DarkGray
+    if (-not [string]::IsNullOrWhiteSpace($before.WorkingDirectory)) {
+        Write-Host "      Cache path:    $($before.WorkingDirectory)" -ForegroundColor DarkGray
+    }
+    if ($null -ne $before.PolicyDownloadMode) {
+        Write-Host "      Policy mode:   $($before.PolicyDownloadMode)" -ForegroundColor DarkGray
+    }
+    Write-Host ""
+
+    $confirm = Read-Host "  Proceed? (Y/N)"
+    if ($confirm -notmatch '^[Yy]') {
+        Write-Host "  Cancelled." -ForegroundColor DarkGray
+        return
+    }
+
+    Write-Host "`n  Clearing Delivery Optimization cache..." -ForegroundColor Yellow
+    try {
+        Delete-DeliveryOptimizationCache -IncludePinnedFiles -Force -ErrorAction Stop | Out-Null
+        Write-Host "  ✅ Delivery Optimization cache cleared." -ForegroundColor Green
+    }
+    catch {
+        Write-Host "  ⚠️ Cache cleanup reported an error: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
+    Write-Host "`n  Applying safe disable policy (DODownloadMode = 0)..." -ForegroundColor Yellow
+    try {
+        Set-DeliveryOptimizationDownloadModePolicy -Mode 0
+        Write-Host "  ✅ Delivery Optimization policy set to CdnOnly." -ForegroundColor Green
+    }
+    catch {
+        Write-Host "  ❌ Failed to set Delivery Optimization policy: $($_.Exception.Message)" -ForegroundColor Red
+        return
+    }
+
+    Write-Host "`n  Refreshing Delivery Optimization service..." -ForegroundColor Yellow
+    if (Refresh-DeliveryOptimizationService) {
+        Write-Host "  ✅ Delivery Optimization service refreshed." -ForegroundColor Green
+    }
+    else {
+        Write-Host "  ⚠️ Could not confirm a clean DoSvc refresh." -ForegroundColor Yellow
+        Write-Host "     A sign-out/reboot may be needed before Settings reflects the new policy." -ForegroundColor DarkGray
+    }
+
+    $after = Get-DeliveryOptimizationState
+    Write-Host ""
+    Write-Host "  Final status: " -ForegroundColor White -NoNewline
+    if ($after.IsDisabled) {
+        Write-Host "DISABLED ✅" -ForegroundColor Green
+    }
+    elseif ($after.StatusLabel -eq 'Enabled') {
+        Write-Host "ENABLED ⚠️" -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "UNKNOWN ⚠️" -ForegroundColor Yellow
+    }
+    Write-Host "      Mode:          $($after.DownloadMode)" -ForegroundColor DarkGray
+    Write-Host "      Provider:      $($after.DownloadModeProvider)" -ForegroundColor DarkGray
+    Write-Host "      Cache size:    $($after.CacheSizeLabel)" -ForegroundColor DarkGray
+    if ($null -ne $after.PolicyDownloadMode) {
+        Write-Host "      Policy mode:   $($after.PolicyDownloadMode)" -ForegroundColor DarkGray
+    }
+    Write-Host ""
+    Write-Host "  💡 Safe disable here means peer-to-peer Delivery Optimization is off." -ForegroundColor Cyan
+    Write-Host "     Windows can still download updates/apps directly from Microsoft/CDN." -ForegroundColor DarkGray
 }
 
 # ─────────────────────────────────────────────
@@ -1751,6 +2039,10 @@ switch ($Action) {
         Write-Output (Get-LiveDownloadCacheStatusLine)
         return
     }
+    'DeliveryOptimizationStatus' {
+        Write-Output (Get-DeliveryOptimizationStatusLine)
+        return
+    }
     'DismFailureSummary' {
         Show-DismFailureSummary -Compact
         return
@@ -1761,6 +2053,10 @@ switch ($Action) {
     }
     'LiveCleanup' {
         Remove-LiveSoftwareDistributionDownload
+        $directActionCompleted = $true
+    }
+    'DeliveryOptimizationCleanup' {
+        Invoke-DeliveryOptimizationCleanupAndDisable
         $directActionCompleted = $true
     }
     'WindowsUpdateCleanup' {

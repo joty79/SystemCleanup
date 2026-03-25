@@ -15,6 +15,7 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Refined the `CBS`/`DISM` log summary ranking so missing-path clues such as `InFlight`, `STATUS_OBJECT_PATH_NOT_FOUND`, and `RBDSTAMIL99` are prioritized ahead of low-signal finalize noise.
 - Compressed the automatic `DISM` / `CBS` failure summary into short human-readable clues so the output stays readable inside narrow Windows Terminal split panes.
 - Added a new main-menu option `[5] Last DISM/CBS Failure Details` that shows a wider non-compact servicing log view outside the WT split-pane flow.
+- Added a new main-menu option `[6] Delivery Optimization Cleanup + Disable` that shows the live Delivery Optimization state/cache size and uses native Delivery Optimization cmdlets plus `DODownloadMode = 0 (CdnOnly)` for safe peer-disable behavior.
 
 ## [2026-03-10]
 

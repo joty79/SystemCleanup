@@ -71,7 +71,9 @@ REM ---------------------------------------------------------
 :Menu
 cls
 set "LiveDownloadCacheLine=Clean live Download cache files"
+set "DeliveryOptimizationLine=Delivery Optimization status unavailable"
 for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action LiveCleanupStatus -SilentCaller') do set "LiveDownloadCacheLine=%%a"
+for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DeliveryOptimizationStatus -SilentCaller') do set "DeliveryOptimizationLine=%%a"
 echo.
 echo %cCyan%==========================================%cReset%
 echo    %cBold%  SYSTEM CLEANUP AND REPAIR TOOL%cReset%
@@ -94,15 +96,19 @@ echo.
 echo    %cMagenta%[ 5 ]%cReset% Last DISM/CBS Failure Details
 echo          %cGray%Full-width recent servicing log view%cReset%
 echo.
+echo    %cWhite%[ 6 ]%cReset% Delivery Optimization Cleanup + Disable
+echo          %cGray%!DeliveryOptimizationLine!%cReset%
+echo.
 echo    %cRed%[ ESC ]%cReset% Close / Cancel
 echo.
-<nul set /p "=  Enter choice (1/2/3/4/5/ESC): "
+<nul set /p "=  Enter choice (1/2/3/4/5/6/ESC): "
 for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action ReadMainMenuChoice -SilentCaller') do set "CHOICE=%%a"
 
 if /i "%CHOICE%"=="2" goto :InFlightOnly
 if /i "%CHOICE%"=="3" goto :LiveSoftwareDistribution
 if /i "%CHOICE%"=="4" goto :ManageUpdates
 if /i "%CHOICE%"=="5" goto :DismFailureDetails
+if /i "%CHOICE%"=="6" goto :DeliveryOptimizationCleanup
 if /i "%CHOICE%"=="ESC" exit /b
 if /i "%CHOICE%"=="X" exit /b
 if "%CHOICE%" NEQ "1" (
@@ -234,6 +240,20 @@ echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DismFailureSummaryFull -SilentCaller
 echo.
 pause
+goto :Menu
+
+REM ---------------------------------------------------------
+REM OPTION 6: Delivery Optimization Cleanup + Disable
+REM ---------------------------------------------------------
+:DeliveryOptimizationCleanup
+cls
+echo.
+echo %cCyan%==========================================%cReset%
+echo    %cBold%  DELIVERY OPTIMIZATION CLEANUP + DISABLE%cReset%
+echo %cCyan%==========================================%cReset%
+echo.
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DeliveryOptimizationCleanup
+echo.
 goto :Menu
 
 REM ---------------------------------------------------------

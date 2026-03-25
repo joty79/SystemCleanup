@@ -20,6 +20,7 @@
 | 🔧 | **[Full Cleanup](#-full-cleanup)** | SFC → DISM `/ResetBase` → WinSxS Temp cleanup in a single automated flow |
 | ⚡ | **[InFlight Cleanup](#-inflight-cleanup)** | Quick-clean locked files from `WinSxS\Temp` using `MoveFileEx` |
 | 💾 | **[Live SoftwareDistribution Cleanup](#-live-softwaredistribution-cleanup)** | Clean the live `SoftwareDistribution\Download` cache without resetting update history |
+| 🚚 | **[Delivery Optimization Cleanup + Disable](#-delivery-optimization-cleanup--disable)** | Clear the Delivery Optimization cache and safely force peer-to-peer sharing off |
 | 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, clean stale backups, block Win11 upgrade |
 | 📦 | **[Installer](#-installation)** | One-command setup with context menu registration and GitHub updates |
 
@@ -64,6 +65,8 @@ Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`
 When a `DISM` step fails, the launcher also prints the native exit code, points directly to `C:\Windows\Logs\DISM\dism.log` and `C:\Windows\Logs\CBS\CBS.log`, and shows a short ranked summary of the most relevant recent `DISM` / `CBS` clues in a compact format that remains readable in narrow Windows Terminal panes.
 
 Main-menu option `[5]` opens a wider non-compact `DISM` / `CBS` failure view so the same servicing clues are easier to read outside the WT split-pane flow.
+
+Main-menu option `[6]` shows the live Delivery Optimization state directly in the gray description line and lets you clear the Delivery Optimization cache while safely forcing `DownloadMode = 0 (CdnOnly)` so peer-to-peer sharing stays off.
 
 On the experimental `wt` branch, the main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing. In WT sessions, `Full Cleanup` opens in a dedicated split pane and runs through `cmd.exe`, preserving the familiar native `% progress` display for `SFC` and `DISM`.
 
@@ -151,6 +154,19 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\CleanInFlight.ps1 -SilentCaller
 **Best used:** after monthly updates when you want to reclaim space from leftover update downloads.
 
 **From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 3*
+
+---
+
+## 🚚 Delivery Optimization Cleanup + Disable
+
+> Clear the Delivery Optimization cache and safely force peer-to-peer Delivery Optimization off without breaking normal Microsoft/CDN downloads.
+
+- The main menu shows the live Delivery Optimization state as `Disabled` / `Enabled` plus the current cache size
+- The action uses the native `Delete-DeliveryOptimizationCache` cmdlet instead of manually deleting random files
+- Safe disable is implemented as `DODownloadMode = 0 (CdnOnly)`, which disables peer-to-peer caching while still allowing normal Windows Update / Microsoft Store downloads
+- The tool also shows the effective mode/provider and the working cache path so VM testing is easier
+
+This is intentionally **not** implemented as `Disable-Service DoSvc`, because that is a riskier way to interfere with the Delivery Optimization stack than simply forcing peer-sharing off.
 
 ---
 

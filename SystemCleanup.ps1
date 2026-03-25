@@ -118,7 +118,7 @@ function Write-Log {
 }
 
 function Read-MainMenuKey {
-    Write-Host '  Enter choice (1/2/3/4/5/ESC): ' -ForegroundColor White -NoNewline
+    Write-Host '  Enter choice (1/2/3/4/5/6/ESC): ' -ForegroundColor White -NoNewline
     $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     if ($key.VirtualKeyCode -eq 27) {
         Write-Host 'ESC' -ForegroundColor DarkGray
@@ -148,6 +148,16 @@ function Get-LiveDownloadCacheStatusLine {
     }
     catch {
         return 'Clean live Download cache files'
+    }
+}
+
+function Get-DeliveryOptimizationStatusLine {
+    $manageUpdatesPath = Join-Path $PSScriptRoot 'ManageUpdates.ps1'
+    try {
+        return (& $manageUpdatesPath -Action DeliveryOptimizationStatus -SilentCaller | Out-String).Trim()
+    }
+    catch {
+        return 'Delivery Optimization status unavailable'
     }
 }
 
@@ -352,6 +362,7 @@ function Show-DetailedServicingLogs {
 function Show-MainMenu {
     Clear-Host
     $liveDownloadCacheLine = Get-LiveDownloadCacheStatusLine
+    $deliveryOptimizationLine = Get-DeliveryOptimizationStatusLine
 
     Write-Host ''
     Write-Host '==========================================' -ForegroundColor Cyan
@@ -374,6 +385,9 @@ function Show-MainMenu {
     Write-Host ''
     Write-Host '   [ 5 ] Last DISM/CBS Failure Details' -ForegroundColor Magenta
     Write-Host '         Full-width recent servicing log view' -ForegroundColor DarkGray
+    Write-Host ''
+    Write-Host '   [ 6 ] Delivery Optimization Cleanup + Disable' -ForegroundColor White
+    Write-Host "         $deliveryOptimizationLine" -ForegroundColor DarkGray
     Write-Host ''
     Write-Host '   [ ESC ] Close / Cancel' -ForegroundColor Red
     Write-Host ''
@@ -409,6 +423,11 @@ while ($true) {
         }
         '^5$' {
             Show-DetailedServicingLogs
+            continue
+        }
+        '^6$' {
+            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DeliveryOptimizationCleanup -SilentCaller
+            Wait-ReturnToMenu
             continue
         }
         '^ESC$' {

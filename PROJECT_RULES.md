@@ -365,3 +365,11 @@
 - Guardrail/rule: Keep the on-failure `DISM`/`CBS` summary compact for split panes, and also expose a main-menu option `[5] Last DISM/CBS Failure Details` that shows a wider non-compact recent servicing log view. Keep this aligned across `SystemCleanup.ps1`, `SystemCleanup.cmd`, and the shared `ManageUpdates.ps1` action set.
 - Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and `ManageUpdates.ps1`; static review of main-menu numbering and shared action wiring.
+
+### Entry - 2026-03-25 (Safe Delivery Optimization cleanup + disable path)
+- Date: 2026-03-25
+- Problem: Users wanted a visible main-menu way to see whether Delivery Optimization peer sharing is off, see the current cache size, and reclaim Delivery Optimization cache space without manually hunting through Settings or raw folders.
+- Root cause: The repo had no Delivery Optimization status probe or cleanup action, and a naive implementation could have disabled the `DoSvc` service directly instead of using the safer supported peer-disable path.
+- Guardrail/rule: In this repo, Delivery Optimization "disable" means forcing `DODownloadMode = 0 (CdnOnly)` so peer-to-peer caching is off while Windows Update / Microsoft Store downloads still work from Microsoft/CDN. Prefer the native Delivery Optimization cmdlets (`Get-DOConfig`, `Get-DeliveryOptimizationPerfSnap`, `Delete-DeliveryOptimizationCache`) for status/cache handling instead of manual cache-folder deletion or direct `DoSvc` service disable. Expose this as main-menu option `[6]` with a live `Disabled/Enabled + cache size` description line.
+- Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1` and `SystemCleanup.ps1`; local non-admin status probe via `Get-DOConfig` / `Get-DeliveryOptimizationPerfSnap`; static review of main-menu wiring.
