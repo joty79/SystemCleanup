@@ -309,3 +309,11 @@
 - Guardrail/rule: For option `[4]`, always launch `cleanmgr` directly (no external `cmd` wrapper). After launch, use Win32 `SetForegroundWindow` + `ShowWindow(SW_RESTORE)` via P/Invoke to auto-activate any `cleanmgr` GUI windows. After the parent process exits, enter a tail-wait loop that monitors and activates any detached child `cleanmgr` processes. Also: never use `$pid` as a variable name inside helper functions — it is a read-only PowerShell automatic variable.
 - Files affected: `ManageUpdates.ps1`, `PROJECT_RULES.md`
 - Validation/tests run: Live run from WT session confirmed `cleanmgr` completes without manual interaction; debug log verified direct launch + immediate exit when no cleanup needed.
+
+### Entry - 2026-03-25 (Full Cleanup must include DISM /ResetBase)
+- Date: 2026-03-25
+- Problem: The repo described `Full Cleanup` as the user's preferred aggressive servicing flow, but the actual runtime paths still stopped at plain `DISM StartComponentCleanup`, leaving the `/ResetBase` step out entirely.
+- Root cause: The earlier decision to prefer the more reliable `DISM /ResetBase` servicing cleanup over the flaky `cleanmgr` path never got propagated into all three shipped Full Cleanup entrypoints.
+- Guardrail/rule: In this repo, `Full Cleanup` means `SFC -> DISM AnalyzeComponentStore -> DISM RestoreHealth -> DISM StartComponentCleanup /ResetBase -> CleanInFlight -> final SFC`. Keep `SystemCleanup.cmd`, `FullCleanup.cmd`, `SystemCleanup.ps1`, and the README flow text aligned with that exact sequence. Treat the separate `Windows Update Cleanup (Disk Cleanup Utility)` action as an optional legacy `cleanmgr` path, not the primary component-store cleanup path.
+- Files affected: `SystemCleanup.cmd`, `FullCleanup.cmd`, `SystemCleanup.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of CMD/README sequence alignment.

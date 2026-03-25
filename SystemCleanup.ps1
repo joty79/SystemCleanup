@@ -271,7 +271,7 @@ function Invoke-FullCleanup {
     [void](Invoke-CmdNativeStep -Title 'SFC (Initial Scan)' -CommandLine 'sfc.exe /scannow')
     [void](Invoke-CmdNativeStep -Title 'DISM AnalyzeComponentStore' -CommandLine 'dism.exe /Online /Cleanup-Image /AnalyzeComponentStore')
     [void](Invoke-CmdNativeStep -Title 'DISM RestoreHealth' -CommandLine 'dism.exe /Online /Cleanup-Image /RestoreHealth')
-    [void](Invoke-CmdNativeStep -Title 'DISM StartComponentCleanup' -CommandLine 'dism.exe /Online /Cleanup-Image /StartComponentCleanup')
+    [void](Invoke-CmdNativeStep -Title 'DISM StartComponentCleanup /ResetBase' -CommandLine 'dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase')
 
     Write-Host ''
     Write-Host '=== Cleaning WinSxS Temp ===' -ForegroundColor Cyan

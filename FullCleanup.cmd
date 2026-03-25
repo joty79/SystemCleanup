@@ -32,7 +32,7 @@ call :ResetService
 call :RunStep " SFC (Initial Scan)" "sfc.exe /scannow"
 call :RunStep " DISM AnalyzeComponentStore" "dism.exe /Online /Cleanup-Image /AnalyzeComponentStore"
 call :RunStep " DISM RestoreHealth" "dism.exe /Online /Cleanup-Image /RestoreHealth"
-call :RunStep " DISM StartComponentCleanup" "dism.exe /Online /Cleanup-Image /StartComponentCleanup"
+call :RunStep " DISM StartComponentCleanup /ResetBase" "dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase"
 
 echo.
 echo %cCyan%=== Cleaning WinSxS Temp ===%cReset%

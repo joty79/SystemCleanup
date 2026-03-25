@@ -2,6 +2,13 @@
 
 All notable user-facing changes for `SystemCleanup` are recorded here.
 
+## [2026-03-25]
+
+### Changed
+
+- Updated all `Full Cleanup` runtime paths to run `dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase` instead of the plain `StartComponentCleanup` pass.
+- Clarified in the README that `Full Cleanup` now includes the aggressive `DISM /ResetBase` servicing step, while the separate `Windows Update Cleanup` option remains an optional legacy `cleanmgr /sagerun:88` path.
+
 ## [2026-03-10]
 
 ### Changed

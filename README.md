@@ -17,10 +17,10 @@
 
 | # | Tool | Description |
 |:-:|------|-------------|
-| 🔧 | **[Full Cleanup](#-full-cleanup)** | SFC → DISM → WinSxS Temp cleanup in a single automated flow |
+| 🔧 | **[Full Cleanup](#-full-cleanup)** | SFC → DISM `/ResetBase` → WinSxS Temp cleanup in a single automated flow |
 | ⚡ | **[InFlight Cleanup](#-inflight-cleanup)** | Quick-clean locked files from `WinSxS\Temp` using `MoveFileEx` |
 | 💾 | **[Live SoftwareDistribution Cleanup](#-live-softwaredistribution-cleanup)** | Clean the live `SoftwareDistribution\Download` cache without resetting update history |
-| 🧹 | **[Windows Update Cleanup](#-windows-update-cleanup-disk-cleanup-utility)** | Run isolated `Disk Cleanup Utility` / `cleanmgr /sagerun:88` for WinSxS update leftovers |
+| 🧹 | **[Windows Update Cleanup](#-windows-update-cleanup-disk-cleanup-utility)** | Optional legacy `cleanmgr /sagerun:88` pass for extra post-update cleanup/troubleshooting |
 | 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, clean stale backups, block Win11 upgrade |
 | 📦 | **[Installer](#-installation)** | One-command setup with context menu registration and GitHub updates |
 
@@ -28,7 +28,7 @@
 
 ## 🔧 Full Cleanup
 
-> Automated system image repair: SFC scan, DISM component store maintenance, and WinSxS Temp cleanup — all sequenced correctly with logging.
+> Automated system image repair: SFC scan, DISM component store maintenance with `/ResetBase`, and WinSxS Temp cleanup — all sequenced correctly with logging.
 
 ### The Problem
 
@@ -49,7 +49,7 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 │  ② SFC /scannow  (initial scan)                            │
 │  ③ DISM AnalyzeComponentStore                               │
 │  ④ DISM RestoreHealth                                       │
-│  ⑤ DISM StartComponentCleanup                               │
+│  ⑤ DISM StartComponentCleanup /ResetBase                   │
 │  ⑥ CleanInFlight.ps1  (WinSxS\Temp deep clean)             │
 │  ⑦ Reset TrustedInstaller + SFC /scannow  (verification)   │
 │                                                             │
@@ -58,7 +58,9 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. After any option completes, the tool **returns to the main menu** — only `ESC` exits the CMD launcher.
+Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. The main `Full Cleanup` flow now uses `dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase`, so superseded component versions are reclaimed immediately instead of waiting for the plain 30-day cleanup window. After any option completes, the tool **returns to the main menu** — only `ESC` exits the CMD launcher.
+
+`/ResetBase` is intentionally more aggressive: after that step, older superseded component versions are no longer uninstallable.
 
 On the experimental `wt` branch, the main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing. In WT sessions, `Full Cleanup` opens in a dedicated split pane and runs through `cmd.exe`, preserving the familiar native `% progress` display for `SFC` and `DISM`.
 
@@ -151,7 +153,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\CleanInFlight.ps1 -SilentCaller
 
 ## 🧹 Windows Update Cleanup (Disk Cleanup Utility)
 
-> Extra post-update cleanup for superseded WinSxS / component-store update leftovers using the built-in Disk Cleanup Utility.
+> Optional legacy post-update cleanup for superseded WinSxS / component-store update leftovers using the built-in Disk Cleanup Utility.
 
 - Main menu option `[4]`
 - Runs an isolated `Disk Cleanup Utility` task:
@@ -160,12 +162,13 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\CleanInFlight.ps1 -SilentCaller
 cleanmgr /sagerun:88
 ```
 
-- Targets the same `Windows Update Cleanup` family as the Disk Cleanup GUI
+- Targets the same general component-store cleanup family as the Disk Cleanup GUI
 - Leaves the live `SoftwareDistribution` cache alone
 - May also scavenge `C:\Windows\WinSxS\Temp\PendingDeletes`
 - Before and after the run, the tool shows `Reclaimable packages`, `Backups and Disabled Features`, and `Cleanup recommended`
 - Writes a dedicated debug log under `%LOCALAPPDATA%\SystemCleanupContext\logs` so machine-specific `cleanmgr` / slot issues can be diagnosed without enabling verbose logging for the whole tool
 - On the experimental `wt` branch, the cleanup now launches `cleanmgr` directly and auto-activates its GUI window when needed, so the first-run WT focus stall no longer requires a manual click
+- `Full Cleanup` already performs the more reliable `DISM StartComponentCleanup /ResetBase` servicing pass, so option `[4]` is mainly kept as a separate `cleanmgr` path when you explicitly want that legacy tool
 
 **Best used:** after Windows Updates are installed and the PC has rebooted.
 

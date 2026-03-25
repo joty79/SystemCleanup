@@ -151,7 +151,7 @@ set "SFC_EXIT=%EXITCODE%"
 REM Phase 2: DISM Core Maintenance
 call :RunStep " DISM AnalyzeComponentStore" "dism.exe /Online /Cleanup-Image /AnalyzeComponentStore"
 call :RunStep " DISM RestoreHealth" "dism.exe /Online /Cleanup-Image /RestoreHealth"
-call :RunStep " DISM StartComponentCleanup" "dism.exe /Online /Cleanup-Image /StartComponentCleanup"
+call :RunStep " DISM StartComponentCleanup /ResetBase" "dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase"
 
 REM Phase 3: InFlight Call
 echo.
