@@ -428,36 +428,45 @@ while ($true) {
 
     switch -Regex ($choice) {
         '^1$' {
+            Clear-Host
             Invoke-FullCleanup
             continue
         }
         '^2$' {
+            Clear-Host
             Invoke-InFlightOnly
             continue
         }
         '^3$' {
+            Clear-Host
             & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action LiveCleanup -SilentCaller
             $script:CachedLiveDownloadCacheLine = Get-LiveDownloadCacheStatusLine
             Wait-ReturnToMenu
             continue
         }
         '^4$' {
+            Clear-Host
             & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DeliveryOptimizationCleanup -SilentCaller
             $script:CachedDeliveryOptimizationLine = Get-DeliveryOptimizationStatusLine
             Wait-ReturnToMenu
             continue
         }
         '^5$' {
+            Clear-Host
             & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action Menu -SilentCaller
             continue
         }
         '^6$' {
+            Clear-Host
             Show-DetailedServicingLogs
             continue
         }
         '^7$' {
-            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action ToolSelfUpdate -SilentCaller
-            Wait-ReturnToMenu
+            Clear-Host
+            $toolSelfUpdateResult = & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action ToolSelfUpdate -SilentCaller
+            if ($toolSelfUpdateResult -ne '__SYSTEMCLEANUP_SKIP_RETURN_TO_MENU__') {
+                Wait-ReturnToMenu
+            }
             continue
         }
         '^ESC$' {

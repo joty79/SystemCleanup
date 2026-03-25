@@ -19,6 +19,8 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Refined the self-update screen to show user-facing InstallerCore defaults as `Installer Mode` / `GitHub branch` or `Local source`, with `Enter` using those defaults and `E` opening the standard `Install.ps1` menu for alternate Local/GitHub/branch choices.
 - Reformatted the self-update choice prompt into clearer per-line colored actions and added an explicit note about when source/branch selections are persisted for the next run.
 - Reduced main-menu delay by caching the expensive live status lines for `Live SoftwareDistribution Cleanup` and `Delivery Optimization Cleanup + Disable` after the first menu render, then refreshing only after those actions actually run.
+- Changed self-update `ESC` cancel handling so it returns straight to the main menu instead of stopping on the generic `Press any key to return to menu...` pause.
+- Cleared the main-menu screen before launching each main-menu action and highlighted the active self-update values (`Detected mode`, `Installer Mode`, `GitHub branch` / `Local source`) in bright green with clearer icons.
 
 ## [2026-03-10]
 

@@ -8,6 +8,8 @@ param(
     [string]$Action = 'Menu'
 )
 
+$script:SkipReturnToMenuToken = '__SYSTEMCLEANUP_SKIP_RETURN_TO_MENU__'
+
 # 🔸 Force UTF-8 Encoding
 $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -706,6 +708,7 @@ function Read-InstallerCoreUpdateChoice {
 function Invoke-InstallerCoreToolUpdate {
     $state = Get-InstallerCoreUpdateState
 
+    Clear-Host
     Write-Host "`n  🔵 TOOL SELF-UPDATE (INSTALLERCORE)" -ForegroundColor Cyan
     Write-Host "  $('─' * 38)" -ForegroundColor DarkGray
 
@@ -717,18 +720,23 @@ function Invoke-InstallerCoreToolUpdate {
         return
     }
 
-    Write-Host "  Detected mode:      $($state.Mode)" -ForegroundColor DarkGray
-    Write-Host "  Installer Mode:     $($state.InstallerMode)" -ForegroundColor DarkGray
+    Write-Host '  🧭 Detected mode:    ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $state.Mode -ForegroundColor Green
+    Write-Host '  ⚙️  Installer Mode:  ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $state.InstallerMode -ForegroundColor Green
     if ($state.InstallerMode -eq 'GitHub') {
         if (-not [string]::IsNullOrWhiteSpace($state.GitHubBranch)) {
-            Write-Host "  GitHub branch:      $($state.GitHubBranch)" -ForegroundColor DarkGray
+            Write-Host '  🌿 GitHub branch:   ' -ForegroundColor DarkGray -NoNewline
+            Write-Host $state.GitHubBranch -ForegroundColor Green
         }
         else {
-            Write-Host "  GitHub branch:      auto-detect" -ForegroundColor DarkGray
+            Write-Host '  🌿 GitHub branch:   ' -ForegroundColor DarkGray -NoNewline
+            Write-Host 'auto-detect' -ForegroundColor Green
         }
     }
     elseif (-not [string]::IsNullOrWhiteSpace($state.LocalSourcePath)) {
-        Write-Host "  Local source:       $($state.LocalSourcePath)" -ForegroundColor DarkGray
+        Write-Host '  📁 Local source:    ' -ForegroundColor DarkGray -NoNewline
+        Write-Host $state.LocalSourcePath -ForegroundColor Green
     }
     Write-Host "  Install.ps1 path:   $($state.InstallScriptPath)" -ForegroundColor DarkGray
     Write-Host ""
@@ -757,7 +765,7 @@ function Invoke-InstallerCoreToolUpdate {
     $launchMode = Read-InstallerCoreUpdateChoice
     if ($launchMode -eq 'ESC') {
         Write-Host "  Cancelled." -ForegroundColor DarkGray
-        return
+        return $script:SkipReturnToMenuToken
     }
 
     $pwshCmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue
@@ -841,6 +849,7 @@ function Refresh-DeliveryOptimizationService {
 function Invoke-DeliveryOptimizationCleanupAndDisable {
     $before = Get-DeliveryOptimizationState
 
+    Clear-Host
     Write-Host "`n  🔵 DELIVERY OPTIMIZATION CLEANUP + DISABLE" -ForegroundColor Cyan
     Write-Host "  $('─' * 44)" -ForegroundColor DarkGray
     Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
@@ -1729,6 +1738,7 @@ function Schedule-PathsForDeletionOnReboot {
 function Remove-LiveSoftwareDistributionDownload {
     $downloadPath = 'C:\Windows\SoftwareDistribution\Download'
 
+    Clear-Host
     Write-Host "`n  🔵 LIVE SOFTWAREDISTRIBUTION CLEANUP" -ForegroundColor Cyan
     Write-Host "  $('─' * 40)" -ForegroundColor DarkGray
     Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
@@ -2258,6 +2268,7 @@ function Toggle-Win11Block {
 # 🔵 MAIN MENU LOOP
 # ─────────────────────────────────────────────
 $directActionCompleted = $false
+$skipReturnToMenu = $false
 switch ($Action) {
     'ReadMainMenuChoice' {
         $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
@@ -2307,7 +2318,13 @@ switch ($Action) {
         $directActionCompleted = $true
     }
     'ToolSelfUpdate' {
-        Invoke-InstallerCoreToolUpdate
+        $toolSelfUpdateResult = Invoke-InstallerCoreToolUpdate
+        if ($toolSelfUpdateResult -eq $script:SkipReturnToMenuToken) {
+            $skipReturnToMenu = $true
+            if ($SilentCaller) {
+                Write-Output $script:SkipReturnToMenuToken
+            }
+        }
         $directActionCompleted = $true
     }
     'WindowsUpdateCleanup' {
@@ -2317,7 +2334,7 @@ switch ($Action) {
 }
 
 if ($directActionCompleted) {
-    if (-not $SilentCaller) {
+    if (-not $SilentCaller -and -not $skipReturnToMenu) {
         Wait-ReturnToMenu
         Write-Host ""
     }

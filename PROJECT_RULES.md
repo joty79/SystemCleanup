@@ -405,3 +405,19 @@
 - Guardrail/rule: Cache the `[3]` and `[4]` main-menu status lines after the first successful probe in each launcher session. Refresh only after the corresponding action actually runs, not on every return to the menu. Keep self-update status live if needed; the once-per-session cache rule applies specifically to the expensive folder/cache status probes.
 - Files affected: `SystemCleanup.ps1`, `SystemCleanup.cmd`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: Static review of launcher menu flow; local timing probe for `ManageUpdates.ps1 -Action LiveCleanupStatus` and `DeliveryOptimizationStatus`; PowerShell parser validation on `SystemCleanup.ps1`.
+
+### Entry - 2026-03-25 (Self-update ESC should bypass the generic return pause)
+- Date: 2026-03-25
+- Problem: Cancelling the self-update choice panel with `ESC` still fell through to the launcher's generic `Press any key to return to menu...` pause, which felt wrong because the user had already chosen to back out immediately.
+- Root cause: The launcher treated `ToolSelfUpdate` like every other direct action and always applied the normal return-to-menu pause after the child script returned.
+- Guardrail/rule: When `ESC` cancels the self-update choice panel, return straight to the main menu with no extra pause. Use an explicit signal from `ManageUpdates.ps1` back to the PowerShell launcher instead of guessing from console text.
+- Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1` and `SystemCleanup.ps1`; static review of the launcher return-to-menu flow.
+
+### Entry - 2026-03-25 (Main-menu actions should clear the menu before showing full-screen panels)
+- Date: 2026-03-25
+- Problem: Several PowerShell main-menu actions left the old menu visible above the action panel, which made the screen feel cluttered and unfinished.
+- Root cause: Some actions relied on the child script/function to render new content without first clearing the launcher view, and not every direct action did its own `Clear-Host`.
+- Guardrail/rule: Treat main-menu actions as full-screen panels. Clear the launcher view before dispatching each option, and keep direct-action functions (`Live SoftwareDistribution Cleanup`, `Delivery Optimization Cleanup + Disable`, `Tool Self-Update`) defensive by clearing their own screen too. Highlight the active self-update values (`Detected mode`, `Installer Mode`, `GitHub branch` / `Local source`) with bright value colors so the eye lands on the important state immediately.
+- Files affected: `SystemCleanup.ps1`, `ManageUpdates.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1` and `SystemCleanup.ps1`; static review of main-menu dispatch flow and self-update panel rendering.

@@ -302,6 +302,7 @@ Selection: 'KB5034441'  ← hide by KB number
 - The gray description line shows the detected updater defaults directly in the main menu, for example `Repo copy • GitHub/wt`, `Installed copy • GitHub/master`, or `Installed copy • Local`
 - The self-update screen shows the default `Installer Mode` plus either `GitHub branch` or `Local source`
 - The choice block is split into clear per-line actions: `Enter` uses shown defaults, `E` opens the normal `Install.ps1` interactive menu, and `ESC` cancels
+- Pressing `ESC` in that self-update choice panel returns directly to the main launcher menu without the extra generic pause prompt
 - For installed copies, a successful InstallerCore `Install` / `Update` run saves the chosen `package_source` and `github_ref` into `state\install-meta.json`, so the next launcher run reuses those defaults
 - For repo copies, the default GitHub branch follows the branch currently checked out in `.git`
 
