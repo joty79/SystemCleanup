@@ -322,7 +322,7 @@
 - Date: 2026-03-25
 - Problem: The main-menu `Windows Update Cleanup (Disk Cleanup Utility)` action remained flaky and random in real use, so keeping it in the visible GUI kept inviting users into an unreliable path we had already decided not to rely on.
 - Root cause: The repo had kept the `cleanmgr /sagerun:88` action exposed in the launcher even after `Full Cleanup` was updated to use the preferred `DISM /ResetBase` servicing path.
-- Guardrail/rule: Do not expose `Windows Update Cleanup (Disk Cleanup Utility)` in the main `SystemCleanup` GUI. The launcher should present only four main options: `Full Cleanup`, `InFlight Cleanup Only`, `Live SoftwareDistribution Cleanup`, and `Windows Update Manager`. If the underlying `cleanmgr` implementation is kept for legacy/debug purposes, keep it non-primary and undocumented in the normal user flow.
+- Guardrail/rule: Do not expose `Windows Update Cleanup (Disk Cleanup Utility)` in the main `SystemCleanup` GUI. Keep `cleanmgr` non-primary and undocumented in the normal user flow. The current main-menu maintenance surface may grow, but `cleanmgr` must stay out of the visible primary launcher.
 - Files affected: `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of main-menu numbering and README menu references.
 
@@ -362,7 +362,7 @@
 - Date: 2026-03-25
 - Problem: The compact `WT`-friendly `DISM` failure summary works well in split panes, but users still need an easy way to open a wider non-compact servicing log view from the main menu.
 - Root cause: The launcher only exposed the compact on-failure summary and had no dedicated main-menu route for a wider `DISM` / `CBS` detail view.
-- Guardrail/rule: Keep the on-failure `DISM`/`CBS` summary compact for split panes, and also expose a main-menu option `[5] Last DISM/CBS Failure Details` that shows a wider non-compact recent servicing log view. Keep this aligned across `SystemCleanup.ps1`, `SystemCleanup.cmd`, and the shared `ManageUpdates.ps1` action set.
+- Guardrail/rule: Keep the on-failure `DISM`/`CBS` summary compact for split panes, and also expose a main-menu option `[6] Last DISM/CBS Failure Details` that shows a wider non-compact recent servicing log view. Keep this aligned across `SystemCleanup.ps1`, `SystemCleanup.cmd`, and the shared `ManageUpdates.ps1` action set.
 - Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and `ManageUpdates.ps1`; static review of main-menu numbering and shared action wiring.
 
@@ -370,6 +370,14 @@
 - Date: 2026-03-25
 - Problem: Users wanted a visible main-menu way to see whether Delivery Optimization peer sharing is off, see the current cache size, and reclaim Delivery Optimization cache space without manually hunting through Settings or raw folders.
 - Root cause: The repo had no Delivery Optimization status probe or cleanup action, and a naive implementation could have disabled the `DoSvc` service directly instead of using the safer supported peer-disable path.
-- Guardrail/rule: In this repo, Delivery Optimization "disable" means forcing `DODownloadMode = 0 (CdnOnly)` so peer-to-peer caching is off while Windows Update / Microsoft Store downloads still work from Microsoft/CDN. Prefer the native Delivery Optimization cmdlets (`Get-DOConfig`, `Get-DeliveryOptimizationPerfSnap`, `Delete-DeliveryOptimizationCache`) for status/cache handling instead of manual cache-folder deletion or direct `DoSvc` service disable. Expose this as main-menu option `[6]` with a live `Disabled/Enabled + cache size` description line.
+- Guardrail/rule: In this repo, Delivery Optimization "disable" means forcing `DODownloadMode = 0 (CdnOnly)` so peer-to-peer caching is off while Windows Update / Microsoft Store downloads still work from Microsoft/CDN. Prefer the native Delivery Optimization cmdlets (`Get-DOConfig`, `Get-DeliveryOptimizationPerfSnap`, `Delete-DeliveryOptimizationCache`) for status/cache handling instead of manual cache-folder deletion or direct `DoSvc` service disable. Expose this as main-menu option `[4]` with a live `Disabled/Enabled + cache size` description line.
 - Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1` and `SystemCleanup.ps1`; local non-admin status probe via `Get-DOConfig` / `Get-DeliveryOptimizationPerfSnap`; static review of main-menu wiring.
+
+### Entry - 2026-03-25 (Launcher-level InstallerCore self-update shortcut)
+- Date: 2026-03-25
+- Problem: The repo already shipped a working InstallerCore-generated `Install.ps1` with `Update` / `UpdateGitHub` / `DownloadLatest`, but the main interactive launcher had no easy self-update entrypoint, so users had to remember installer actions separately.
+- Root cause: Installer behavior lived in the sibling generated installer, while the main runtime launcher had no generic bridge into that updater flow.
+- Guardrail/rule: For InstallerCore-onboarded launcher repos, prefer a launcher-level self-update shortcut that reuses the sibling `Install.ps1` instead of inventing a second updater. Detect mode generically: git repo copy -> `DownloadLatest`, installed copy with `state\install-meta.json` -> `UpdateGitHub`, portable fallback -> `DownloadLatest`. Keep the helper naming/tooling generic enough that the same pattern can later be lifted into the `InstallerCore` template or copied into other PowerShell main-menu tools.
+- Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1` and `SystemCleanup.ps1`; local non-admin status probe via `ManageUpdates.ps1 -Action ToolSelfUpdateStatus`; static review of main-menu wiring and sibling `Install.ps1` detection.

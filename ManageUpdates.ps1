@@ -4,7 +4,7 @@
 
 param(
     [switch]$SilentCaller,
-    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus', 'DeliveryOptimizationCleanup', 'DeliveryOptimizationStatus', 'ReadMainMenuChoice', 'DismFailureSummary', 'DismFailureSummaryFull')]
+    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus', 'DeliveryOptimizationCleanup', 'DeliveryOptimizationStatus', 'ToolSelfUpdate', 'ToolSelfUpdateStatus', 'ReadMainMenuChoice', 'DismFailureSummary', 'DismFailureSummaryFull')]
     [string]$Action = 'Menu'
 )
 
@@ -556,6 +556,170 @@ function Get-DeliveryOptimizationStatusLine {
     }
 
     return ('Status {0} • Cache {1}' -f $state.DownloadMode, $state.CacheSizeLabel)
+}
+
+# Generic launcher-side InstallerCore update probe.
+# This is intentionally tool-agnostic so the same pattern can be lifted into other main-menu tools later.
+function Get-InstallerCoreUpdateState {
+    $state = [ordered]@{
+        IsAvailable = $false
+        InstallScriptPath = ''
+        Mode = 'Unavailable'
+        RecommendedAction = ''
+        GitHubRef = ''
+        StatusLine = 'InstallerCore updater unavailable'
+        RelaunchesInstaller = $false
+        Reason = ''
+    }
+
+    $installScriptPath = Join-Path $PSScriptRoot 'Install.ps1'
+    if (-not (Test-Path -LiteralPath $installScriptPath)) {
+        $state.Reason = 'Install.ps1 not found beside the launcher.'
+        return [pscustomobject]$state
+    }
+
+    $state.IsAvailable = $true
+    $state.InstallScriptPath = $installScriptPath
+
+    $gitRoot = Join-Path $PSScriptRoot '.git'
+    if (Test-Path -LiteralPath $gitRoot) {
+        $state.Mode = 'Repo copy'
+        $state.RecommendedAction = 'DownloadLatest'
+        $state.RelaunchesInstaller = $true
+
+        $gitBranch = ''
+        try {
+            $gitBranch = (& git.exe -C $PSScriptRoot branch --show-current 2>$null | Out-String).Trim()
+        }
+        catch {}
+
+        if ([string]::IsNullOrWhiteSpace($gitBranch)) {
+            try {
+                $gitBranch = (& git.exe -C $PSScriptRoot rev-parse --abbrev-ref HEAD 2>$null | Out-String).Trim()
+                if ($gitBranch -eq 'HEAD') {
+                    $gitBranch = ''
+                }
+            }
+            catch {}
+        }
+
+        $state.GitHubRef = $gitBranch
+        $branchLabel = if ([string]::IsNullOrWhiteSpace($gitBranch)) { 'auto' } else { $gitBranch }
+        $state.StatusLine = "Repo copy -> DownloadLatest ($branchLabel)"
+        return [pscustomobject]$state
+    }
+
+    $metaPath = Join-Path $PSScriptRoot 'state\install-meta.json'
+    if (Test-Path -LiteralPath $metaPath) {
+        $state.Mode = 'Installed copy'
+        $state.RecommendedAction = 'UpdateGitHub'
+
+        try {
+            $meta = Get-Content -LiteralPath $metaPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $githubRef = ''
+            if ($meta.PSObject.Properties['github_ref'] -and -not [string]::IsNullOrWhiteSpace([string]$meta.github_ref)) {
+                $githubRef = ([string]$meta.github_ref).Trim()
+            }
+            elseif ($meta.PSObject.Properties['source_path'] -and ([string]$meta.source_path) -match '^github://.+?@(.+)$') {
+                $githubRef = ($Matches[1]).Trim()
+            }
+
+            $state.GitHubRef = $githubRef
+        }
+        catch {
+            $state.Reason = 'install-meta.json could not be parsed; falling back to GitHub auto-detect.'
+        }
+
+        $branchLabel = if ([string]::IsNullOrWhiteSpace($state.GitHubRef)) { 'auto' } else { $state.GitHubRef }
+        $state.StatusLine = "Installed copy -> UpdateGitHub ($branchLabel)"
+        return [pscustomobject]$state
+    }
+
+    $state.Mode = 'Portable copy'
+    $state.RecommendedAction = 'DownloadLatest'
+    $state.RelaunchesInstaller = $true
+    $state.StatusLine = 'Portable copy -> DownloadLatest (auto)'
+    $state.Reason = 'No .git folder and no install-meta.json were found.'
+    return [pscustomobject]$state
+}
+
+function Get-InstallerCoreUpdateStatusLine {
+    $state = Get-InstallerCoreUpdateState
+    return $state.StatusLine
+}
+
+function Invoke-InstallerCoreToolUpdate {
+    $state = Get-InstallerCoreUpdateState
+
+    Write-Host "`n  🔵 TOOL SELF-UPDATE (INSTALLERCORE)" -ForegroundColor Cyan
+    Write-Host "  $('─' * 38)" -ForegroundColor DarkGray
+
+    if (-not $state.IsAvailable) {
+        Write-Host "  ❌ $($state.StatusLine)" -ForegroundColor Red
+        if (-not [string]::IsNullOrWhiteSpace($state.Reason)) {
+            Write-Host "     $($state.Reason)" -ForegroundColor DarkGray
+        }
+        return
+    }
+
+    Write-Host "  Detected mode:      $($state.Mode)" -ForegroundColor DarkGray
+    Write-Host "  Installer action:   $($state.RecommendedAction)" -ForegroundColor DarkGray
+    if (-not [string]::IsNullOrWhiteSpace($state.GitHubRef)) {
+        Write-Host "  GitHub ref:         $($state.GitHubRef)" -ForegroundColor DarkGray
+    }
+    else {
+        Write-Host "  GitHub ref:         auto-detect" -ForegroundColor DarkGray
+    }
+    Write-Host "  Install.ps1 path:   $($state.InstallScriptPath)" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  ⚠️  This will update the tool via the sibling InstallerCore-generated Install.ps1." -ForegroundColor Yellow
+    if ($state.RecommendedAction -eq 'DownloadLatest') {
+        Write-Host "      • Current folder will be refreshed in place from GitHub" -ForegroundColor Gray
+        if ($state.RelaunchesInstaller) {
+            Write-Host "      • InstallerCore may relaunch the updated installer after download" -ForegroundColor Gray
+        }
+    }
+    else {
+        Write-Host "      • Installed copy under %LOCALAPPDATA% will be updated from GitHub" -ForegroundColor Gray
+        Write-Host "      • Registry/verification paths stay under the normal InstallerCore update flow" -ForegroundColor Gray
+    }
+    Write-Host ""
+
+    $confirm = Read-Host "  Proceed? (Y/N)"
+    if ($confirm -notmatch '^[Yy]') {
+        Write-Host "  Cancelled." -ForegroundColor DarkGray
+        return
+    }
+
+    $pwshCmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    $pwshExe = if ($null -ne $pwshCmd) { $pwshCmd.Source } else { Join-Path $PSHOME 'pwsh.exe' }
+    $launcherArgs = @(
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $state.InstallScriptPath,
+        '-Action', $state.RecommendedAction,
+        '-Force'
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($state.GitHubRef)) {
+        $launcherArgs += @('-GitHubRef', $state.GitHubRef)
+    }
+
+    Write-Host "`n  Launching InstallerCore update flow..." -ForegroundColor Yellow
+    & $pwshExe @launcherArgs
+    $exitCode = $LASTEXITCODE
+
+    Write-Host ""
+    if ($exitCode -eq 0) {
+        Write-Host "  ✅ Update flow completed successfully." -ForegroundColor Green
+        return
+    }
+    if ($exitCode -eq 2) {
+        Write-Host "  ⚠️ Update flow completed with warnings." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "  ❌ Update flow failed (exit code: $exitCode)." -ForegroundColor Red
 }
 
 function Set-DeliveryOptimizationDownloadModePolicy {
@@ -2043,6 +2207,10 @@ switch ($Action) {
         Write-Output (Get-DeliveryOptimizationStatusLine)
         return
     }
+    'ToolSelfUpdateStatus' {
+        Write-Output (Get-InstallerCoreUpdateStatusLine)
+        return
+    }
     'DismFailureSummary' {
         Show-DismFailureSummary -Compact
         return
@@ -2057,6 +2225,10 @@ switch ($Action) {
     }
     'DeliveryOptimizationCleanup' {
         Invoke-DeliveryOptimizationCleanupAndDisable
+        $directActionCompleted = $true
+    }
+    'ToolSelfUpdate' {
+        Invoke-InstallerCoreToolUpdate
         $directActionCompleted = $true
     }
     'WindowsUpdateCleanup' {

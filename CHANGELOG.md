@@ -8,14 +8,14 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 
 - Updated all `Full Cleanup` runtime paths to run `dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase` instead of the plain `StartComponentCleanup` pass.
 - Removed the flaky main-menu `Windows Update Cleanup (Disk Cleanup Utility)` GUI entry so the launcher no longer exposes the unreliable `cleanmgr /sagerun:88` path.
-- Moved `Windows Update Manager` up to main-menu option `[4]` after removing the `cleanmgr` GUI entry.
+- Reordered the main menu so the current post-update / maintenance flow is `[3] Live SoftwareDistribution Cleanup`, `[4] Delivery Optimization Cleanup + Disable`, `[5] Windows Update Manager`, `[6] Last DISM/CBS Failure Details`, and `[7] Update This Tool (InstallerCore)`.
 - Updated the README to stop advertising the removed `Windows Update Cleanup` main-menu path and to reflect the new main-menu numbering.
 - Expanded `DISM` failure output so the launcher now prints the native exit code, points directly to `dism.log` / `CBS.log`, and gives a targeted hint for `Error 3 / 0x80070003` servicing-path failures.
 - Added a short `DISM` / `CBS` log summary to `DISM` failure output so the launcher now surfaces the most relevant recent error lines automatically after a failed servicing step.
 - Refined the `CBS`/`DISM` log summary ranking so missing-path clues such as `InFlight`, `STATUS_OBJECT_PATH_NOT_FOUND`, and `RBDSTAMIL99` are prioritized ahead of low-signal finalize noise.
 - Compressed the automatic `DISM` / `CBS` failure summary into short human-readable clues so the output stays readable inside narrow Windows Terminal split panes.
-- Added a new main-menu option `[5] Last DISM/CBS Failure Details` that shows a wider non-compact servicing log view outside the WT split-pane flow.
-- Added a new main-menu option `[6] Delivery Optimization Cleanup + Disable` that shows the live Delivery Optimization state/cache size and uses native Delivery Optimization cmdlets plus `DODownloadMode = 0 (CdnOnly)` for safe peer-disable behavior.
+- Added a launcher-level self-update option `[7] Update This Tool (InstallerCore)` that reuses the sibling `Install.ps1` and auto-detects whether to run `DownloadLatest` or `UpdateGitHub`.
+- Added a live updater status probe so the main menu shows the detected InstallerCore update mode directly in the gray description line.
 
 ## [2026-03-10]
 

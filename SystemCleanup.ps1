@@ -118,7 +118,7 @@ function Write-Log {
 }
 
 function Read-MainMenuKey {
-    Write-Host '  Enter choice (1/2/3/4/5/6/ESC): ' -ForegroundColor White -NoNewline
+    Write-Host '  Enter choice (1/2/3/4/5/6/7/ESC): ' -ForegroundColor White -NoNewline
     $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     if ($key.VirtualKeyCode -eq 27) {
         Write-Host 'ESC' -ForegroundColor DarkGray
@@ -158,6 +158,16 @@ function Get-DeliveryOptimizationStatusLine {
     }
     catch {
         return 'Delivery Optimization status unavailable'
+    }
+}
+
+function Get-ToolSelfUpdateStatusLine {
+    $manageUpdatesPath = Join-Path $PSScriptRoot 'ManageUpdates.ps1'
+    try {
+        return (& $manageUpdatesPath -Action ToolSelfUpdateStatus -SilentCaller | Out-String).Trim()
+    }
+    catch {
+        return 'InstallerCore updater unavailable'
     }
 }
 
@@ -363,6 +373,7 @@ function Show-MainMenu {
     Clear-Host
     $liveDownloadCacheLine = Get-LiveDownloadCacheStatusLine
     $deliveryOptimizationLine = Get-DeliveryOptimizationStatusLine
+    $toolSelfUpdateLine = Get-ToolSelfUpdateStatusLine
 
     Write-Host ''
     Write-Host '==========================================' -ForegroundColor Cyan
@@ -380,14 +391,17 @@ function Show-MainMenu {
     Write-Host '   [ 3 ] Live SoftwareDistribution Cleanup' -ForegroundColor Cyan
     Write-Host "         $liveDownloadCacheLine" -ForegroundColor DarkGray
     Write-Host ''
-    Write-Host '   [ 4 ] Windows Update Manager' -ForegroundColor Blue
+    Write-Host '   [ 4 ] Delivery Optimization Cleanup + Disable' -ForegroundColor White
+    Write-Host "         $deliveryOptimizationLine" -ForegroundColor DarkGray
+    Write-Host ''
+    Write-Host '   [ 5 ] Windows Update Manager' -ForegroundColor Blue
     Write-Host '         Hide/unhide/list updates, reset cache, block Win11' -ForegroundColor DarkGray
     Write-Host ''
-    Write-Host '   [ 5 ] Last DISM/CBS Failure Details' -ForegroundColor Magenta
+    Write-Host '   [ 6 ] Last DISM/CBS Failure Details' -ForegroundColor Magenta
     Write-Host '         Full-width recent servicing log view' -ForegroundColor DarkGray
     Write-Host ''
-    Write-Host '   [ 6 ] Delivery Optimization Cleanup + Disable' -ForegroundColor White
-    Write-Host "         $deliveryOptimizationLine" -ForegroundColor DarkGray
+    Write-Host '   [ 7 ] Update This Tool (InstallerCore)' -ForegroundColor Cyan
+    Write-Host "         $toolSelfUpdateLine" -ForegroundColor DarkGray
     Write-Host ''
     Write-Host '   [ ESC ] Close / Cancel' -ForegroundColor Red
     Write-Host ''
@@ -418,15 +432,20 @@ while ($true) {
             continue
         }
         '^4$' {
-            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action Menu -SilentCaller
+            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DeliveryOptimizationCleanup -SilentCaller
+            Wait-ReturnToMenu
             continue
         }
         '^5$' {
-            Show-DetailedServicingLogs
+            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action Menu -SilentCaller
             continue
         }
         '^6$' {
-            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DeliveryOptimizationCleanup -SilentCaller
+            Show-DetailedServicingLogs
+            continue
+        }
+        '^7$' {
+            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action ToolSelfUpdate -SilentCaller
             Wait-ReturnToMenu
             continue
         }

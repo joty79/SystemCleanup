@@ -72,8 +72,10 @@ REM ---------------------------------------------------------
 cls
 set "LiveDownloadCacheLine=Clean live Download cache files"
 set "DeliveryOptimizationLine=Delivery Optimization status unavailable"
+set "ToolSelfUpdateLine=InstallerCore updater unavailable"
 for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action LiveCleanupStatus -SilentCaller') do set "LiveDownloadCacheLine=%%a"
 for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DeliveryOptimizationStatus -SilentCaller') do set "DeliveryOptimizationLine=%%a"
+for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action ToolSelfUpdateStatus -SilentCaller') do set "ToolSelfUpdateLine=%%a"
 echo.
 echo %cCyan%==========================================%cReset%
 echo    %cBold%  SYSTEM CLEANUP AND REPAIR TOOL%cReset%
@@ -90,25 +92,29 @@ echo.
 echo    %cCyan%[ 3 ]%cReset% Live SoftwareDistribution Cleanup
 echo          %cGray%!LiveDownloadCacheLine!%cReset%
 echo.
-echo    %cBlue%[ 4 ]%cReset% Windows Update Manager
+echo    %cWhite%[ 4 ]%cReset% Delivery Optimization Cleanup + Disable
+echo          %cGray%!DeliveryOptimizationLine!%cReset%
+echo.
+echo    %cBlue%[ 5 ]%cReset% Windows Update Manager
 echo          %cGray%Hide/unhide/list updates, reset cache, block Win11%cReset%
 echo.
-echo    %cMagenta%[ 5 ]%cReset% Last DISM/CBS Failure Details
+echo    %cMagenta%[ 6 ]%cReset% Last DISM/CBS Failure Details
 echo          %cGray%Full-width recent servicing log view%cReset%
 echo.
-echo    %cWhite%[ 6 ]%cReset% Delivery Optimization Cleanup + Disable
-echo          %cGray%!DeliveryOptimizationLine!%cReset%
+echo    %cCyan%[ 7 ]%cReset% Update This Tool (InstallerCore)
+echo          %cGray%!ToolSelfUpdateLine!%cReset%
 echo.
 echo    %cRed%[ ESC ]%cReset% Close / Cancel
 echo.
-<nul set /p "=  Enter choice (1/2/3/4/5/6/ESC): "
+<nul set /p "=  Enter choice (1/2/3/4/5/6/7/ESC): "
 for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action ReadMainMenuChoice -SilentCaller') do set "CHOICE=%%a"
 
 if /i "%CHOICE%"=="2" goto :InFlightOnly
 if /i "%CHOICE%"=="3" goto :LiveSoftwareDistribution
-if /i "%CHOICE%"=="4" goto :ManageUpdates
-if /i "%CHOICE%"=="5" goto :DismFailureDetails
-if /i "%CHOICE%"=="6" goto :DeliveryOptimizationCleanup
+if /i "%CHOICE%"=="4" goto :DeliveryOptimizationCleanup
+if /i "%CHOICE%"=="5" goto :ManageUpdates
+if /i "%CHOICE%"=="6" goto :DismFailureDetails
+if /i "%CHOICE%"=="7" goto :ToolSelfUpdate
 if /i "%CHOICE%"=="ESC" exit /b
 if /i "%CHOICE%"=="X" exit /b
 if "%CHOICE%" NEQ "1" (
@@ -253,6 +259,20 @@ echo    %cBold%  DELIVERY OPTIMIZATION CLEANUP + DISABLE%cReset%
 echo %cCyan%==========================================%cReset%
 echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DeliveryOptimizationCleanup
+echo.
+goto :Menu
+
+REM ---------------------------------------------------------
+REM OPTION 7: Update This Tool (InstallerCore)
+REM ---------------------------------------------------------
+:ToolSelfUpdate
+cls
+echo.
+echo %cCyan%==========================================%cReset%
+echo    %cBold%  UPDATE THIS TOOL (INSTALLERCORE)%cReset%
+echo %cCyan%==========================================%cReset%
+echo.
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action ToolSelfUpdate
 echo.
 goto :Menu
 

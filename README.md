@@ -22,6 +22,7 @@
 | 💾 | **[Live SoftwareDistribution Cleanup](#-live-softwaredistribution-cleanup)** | Clean the live `SoftwareDistribution\Download` cache without resetting update history |
 | 🚚 | **[Delivery Optimization Cleanup + Disable](#-delivery-optimization-cleanup--disable)** | Clear the Delivery Optimization cache and safely force peer-to-peer sharing off |
 | 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, clean stale backups, block Win11 upgrade |
+| ⬇️ | **[Self-Update](#-self-update)** | Launch the sibling InstallerCore updater from the main menu with smart repo/install detection |
 | 📦 | **[Installer](#-installation)** | One-command setup with context menu registration and GitHub updates |
 
 ---
@@ -64,9 +65,11 @@ Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`
 
 When a `DISM` step fails, the launcher also prints the native exit code, points directly to `C:\Windows\Logs\DISM\dism.log` and `C:\Windows\Logs\CBS\CBS.log`, and shows a short ranked summary of the most relevant recent `DISM` / `CBS` clues in a compact format that remains readable in narrow Windows Terminal panes.
 
-Main-menu option `[5]` opens a wider non-compact `DISM` / `CBS` failure view so the same servicing clues are easier to read outside the WT split-pane flow.
+Main-menu option `[6]` opens a wider non-compact `DISM` / `CBS` failure view so the same servicing clues are easier to read outside the WT split-pane flow.
 
-Main-menu option `[6]` shows the live Delivery Optimization state directly in the gray description line and lets you clear the Delivery Optimization cache while safely forcing `DownloadMode = 0 (CdnOnly)` so peer-to-peer sharing stays off.
+Main-menu option `[4]` shows the live Delivery Optimization state directly in the gray description line and lets you clear the Delivery Optimization cache while safely forcing `DownloadMode = 0 (CdnOnly)` so peer-to-peer sharing stays off.
+
+Main-menu option `[7]` is a launcher-level self-update shortcut. It detects whether the tool is running from a git repo, an installed copy, or a portable copy, then dispatches to the sibling `Install.ps1` with the most sensible `InstallerCore` update action automatically.
 
 On the experimental `wt` branch, the main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing. In WT sessions, `Full Cleanup` opens in a dedicated split pane and runs through `cmd.exe`, preserving the familiar native `% progress` display for `SFC` and `DISM`.
 
@@ -285,6 +288,20 @@ Selection: 1,3          ← hide updates #1 and #3
 Selection: 'Linux'      ← hide all updates matching "Linux"
 Selection: 'KB5034441'  ← hide by KB number
 ```
+
+---
+
+## ⬇️ Self-Update
+
+> A main-menu shortcut that reuses the existing InstallerCore-generated `Install.ps1` instead of inventing a second updater flow inside the launcher.
+
+- Main menu option `[7]`
+- If the launcher is running from a git working copy, it uses `DownloadLatest` against the current repo folder
+- If the launcher is running from an installed copy with `state\install-meta.json`, it uses `UpdateGitHub` for the installed tool
+- If the launcher is running from a portable folder, it falls back to `DownloadLatest`
+- The gray description line shows the detected update mode directly in the main menu, for example `Repo copy -> DownloadLatest (wt)` or `Installed copy -> UpdateGitHub (wt)`
+
+This keeps updater logic aligned with `InstallerCore`, which makes the pattern a good blueprint for other PowerShell main-menu tools that already ship a sibling `Install.ps1`.
 
 ---
 
