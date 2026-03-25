@@ -762,6 +762,64 @@ function Read-EnterOrEscChoice {
     }
 }
 
+if (-not ('SystemCleanup.NativeUser32' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+namespace SystemCleanup {
+    public static class NativeUser32 {
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsWindow(IntPtr hWnd);
+    }
+}
+'@
+}
+
+function Get-CurrentWindowsTerminalWindowHandle {
+    try {
+        if ([string]::IsNullOrWhiteSpace($env:WT_SESSION)) {
+            return [IntPtr]::Zero
+        }
+
+        $foregroundWindow = [SystemCleanup.NativeUser32]::GetForegroundWindow()
+        if ($foregroundWindow -eq [IntPtr]::Zero) {
+            return [IntPtr]::Zero
+        }
+
+        $processId = 0
+        [void][SystemCleanup.NativeUser32]::GetWindowThreadProcessId($foregroundWindow, [ref]$processId)
+        if ($processId -le 0) {
+            return [IntPtr]::Zero
+        }
+
+        $foregroundProcess = Get-Process -Id $processId -ErrorAction SilentlyContinue
+        if ($null -eq $foregroundProcess) {
+            return [IntPtr]::Zero
+        }
+
+        if ($foregroundProcess.ProcessName -notin @('WindowsTerminal', 'wt')) {
+            return [IntPtr]::Zero
+        }
+
+        return $foregroundWindow
+    }
+    catch {
+        return [IntPtr]::Zero
+    }
+}
+
 function Start-SystemCleanupLauncherRelaunch {
     param(
         [string]$LauncherScriptPath
@@ -776,23 +834,32 @@ function Start-SystemCleanupLauncherRelaunch {
     $wtCmd = Get-Command wt.exe -ErrorAction SilentlyContinue
     $wtExe = if ($null -ne $wtCmd) { $wtCmd.Source } else { '' }
     $launcherDir = Split-Path -Path $LauncherScriptPath -Parent
+    $windowHandleToClose = Get-CurrentWindowsTerminalWindowHandle
+    $windowHandleValue = if ($windowHandleToClose -eq [IntPtr]::Zero) { 0 } else { $windowHandleToClose.ToInt64() }
     $helperPath = Join-Path $env:TEMP ("SystemCleanup_relaunch_{0}.cmd" -f [guid]::NewGuid().ToString('N'))
     $helperContent = [System.Collections.Generic.List[string]]::new()
     [void]$helperContent.AddRange(@(
         '@echo off',
         'setlocal',
-        'timeout /t 2 /nobreak >nul',
+        'timeout /t 1 /nobreak >nul',
         'set "WT_SESSION="'
     ))
 
     if (-not [string]::IsNullOrWhiteSpace($wtExe)) {
         [void]$helperContent.Add(
-            ('start "" "{0}" -w new new-tab "{1}" -NoProfile -ExecutionPolicy Bypass -File "{2}" -WtHosted' -f $wtExe, $pwshExe, $LauncherScriptPath)
+            ('start "" "{0}" -w -1 new-tab "{1}" -NoProfile -ExecutionPolicy Bypass -File "{2}" -WtHosted' -f $wtExe, $pwshExe, $LauncherScriptPath)
         )
     }
     else {
         [void]$helperContent.Add(
             ('start "" "{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}"' -f $pwshExe, $LauncherScriptPath)
+        )
+    }
+
+    if ($windowHandleValue -gt 0) {
+        [void]$helperContent.Add('timeout /t 1 /nobreak >nul')
+        [void]$helperContent.Add(
+            ('"{0}" -NoProfile -ExecutionPolicy Bypass -Command "$hwnd=[IntPtr]::{1}; Add-Type -Namespace Win32 -Name Native -MemberDefinition ''[DllImport(\"user32.dll\", SetLastError=true)] public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam); [DllImport(\"user32.dll\")] public static extern bool IsWindow(IntPtr hWnd);''; if([Win32.Native]::IsWindow($hwnd)){{ [void][Win32.Native]::PostMessage($hwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) }}"' -f $pwshExe, $windowHandleValue)
         )
     }
 
