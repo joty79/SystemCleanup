@@ -25,6 +25,8 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Extended the safe Enter/ESC confirmation pattern across the main menu so `Full Cleanup`, `InFlight Cleanup`, `Live SoftwareDistribution Cleanup`, `Windows Update Manager`, and `Last DISM/CBS Failure Details` now open a confirmation panel before starting/opening.
 - Trimmed that confirmation pattern back for `[5] Windows Update Manager` and `[6] Last DISM/CBS Failure Details`, so submenu/info-only entries open directly again while the real cleanup/update actions remain two-step.
 - Fixed the launcher-side `DISM / CBS` detail panels to explicitly render the returned summary lines instead of relying on implicit nested-script output, so menu `[6]` consistently shows the full servicing summary again.
+- Tightened the servicing-summary selector so menu `[6]` ignores common noisy `DISM` `EnumeratePathEx / FindFirstFile failed` setup probes and scans deeper into `CBS.log`, making root-cause clues more likely to appear than generic source-noise lines.
+- Changed app-driven installed self-updates to skip the old Explorer-folder reopen path and, after a successful installed update, ask whether to relaunch only the app (`Enter`) or relaunch the app plus restart Explorer without reopening a folder window.
 
 ## [2026-03-10]
 

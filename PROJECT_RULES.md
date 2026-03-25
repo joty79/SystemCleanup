@@ -445,3 +445,19 @@
 - Guardrail/rule: For launcher-side troubleshooting views and failure banners, collect returned summary strings from child scripts and print them explicitly with `Write-Host` instead of relying on implicit pipeline rendering.
 - Files affected: `SystemCleanup.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of launcher-side servicing summary rendering.
+
+### Entry - 2026-03-25 (Filter DISM source-noise from servicing summaries and search deeper in CBS)
+- Date: 2026-03-25
+- Problem: The full `[6]` servicing view could still show useless `DISM` `EnumeratePathEx / FindFirstFile failed` lines for setup/source probe paths, while the actual `CBS` root-cause lines were missed.
+- Root cause: The summary matcher used broad `Error` / `path specified` patterns on a shallow tail window, so low-signal `DISM` source-noise could outrank or crowd out the more relevant `CBS` lines.
+- Guardrail/rule: Exclude common low-signal `DISM` source-probe lines like `EnumeratePathEx: FindFirstFile failed ...` from the summary picker, and search deeper into `CBS.log` than `dism.log` because the real root-cause clues often sit further back in the servicing log.
+- Files affected: `ManageUpdates.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review of `DISM` exclude patterns and expanded `CBS` tail scan.
+
+### Entry - 2026-03-25 (App-driven installed updates should relaunch SystemCleanup with an explicit Explorer choice)
+- Date: 2026-03-25
+- Problem: Running self-update from inside the installed app did not need the installer's old Explorer-folder reopen behavior; what users actually need after the update is the app itself restarted on the updated files.
+- Root cause: The launcher reused InstallerCore update actions directly, so the installed-update path still behaved like a generic installer session instead of an in-app self-update lifecycle.
+- Guardrail/rule: For self-update started from an installed `SystemCleanup` session, call `Install.ps1` with `-NoExplorerRestart`, then ask the user how to come back up after a successful installed update: `Enter = relaunch app only`, any other key = `restart Explorer + relaunch app`. The Explorer-refresh path must not reopen a folder window and must avoid `Start-Process explorer.exe`; rely on the shell auto-restart path instead to reduce ghost/zombie Explorer instances. Relaunch `SystemCleanup.ps1` itself using the same `pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ...` style as the context-menu command, then close the old app instance.
+- Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1` and `SystemCleanup.ps1`; static review of installed-copy self-update argument flow and relaunch token handling.

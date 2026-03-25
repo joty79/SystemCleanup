@@ -9,6 +9,7 @@ param(
 )
 
 $script:SkipReturnToMenuToken = '__SYSTEMCLEANUP_SKIP_RETURN_TO_MENU__'
+$script:RelaunchAndExitToken = '__SYSTEMCLEANUP_RELAUNCH_AND_EXIT__'
 
 # 🔸 Force UTF-8 Encoding
 $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -142,6 +143,7 @@ function Get-RecentServicingLogLines {
         [string]$Label,
         [string[]]$Patterns,
         [string[]]$PriorityPatterns = @(),
+        [string[]]$ExcludePatterns = @(),
         [switch]$Compact,
         [int]$TailCount = 250,
         [int]$MaxLines = 4
@@ -170,6 +172,18 @@ function Get-RecentServicingLogLines {
         }
 
         if (-not $isMatch) {
+            continue
+        }
+
+        $isExcluded = $false
+        foreach ($excludePattern in $ExcludePatterns) {
+            if ($recentLine -match $excludePattern) {
+                $isExcluded = $true
+                break
+            }
+        }
+
+        if ($isExcluded) {
             continue
         }
 
@@ -233,7 +247,12 @@ function Show-DismFailureSummary {
         'HRESULT=80070003',
         '0x80070003',
         'path specified'
-    ) -Compact:$Compact -TailCount 400 -MaxLines $(if ($Compact) { 4 } else { 6 })
+    ) -ExcludePatterns @(
+        'EnumeratePathEx:\s+FindFirstFile failed',
+        'FindFirstFile failed for \[\\\\\?\\C:\\\$WINDOWS\.\~',
+        'FindFirstFile failed for \[\\\\\?\\C:\\ESD\\',
+        'FindFirstFile failed for \[\\\\\?\\C:\\INPLACE\.\~'
+    ) -Compact:$Compact -TailCount 1200 -MaxLines $(if ($Compact) { 4 } else { 6 })
     $summaryLines += Get-RecentServicingLogLines -Path $cbsLogPath -Label 'CBS' -Patterns @(
         'Error',
         'ERROR_PATH_NOT_FOUND',
@@ -247,7 +266,7 @@ function Show-DismFailureSummary {
         'STATUS_OBJECT_PATH_NOT_FOUND',
         'ERROR_PATH_NOT_FOUND',
         'Error'
-    ) -Compact:$Compact -TailCount 600 -MaxLines $(if ($Compact) { 4 } else { 6 })
+    ) -Compact:$Compact -TailCount 3000 -MaxLines $(if ($Compact) { 4 } else { 6 })
 
     $summaryLines | Write-Output
 }
@@ -743,6 +762,109 @@ function Read-EnterOrEscChoice {
     }
 }
 
+function Start-SystemCleanupLauncherRelaunch {
+    param(
+        [string]$LauncherScriptPath
+    )
+
+    if ([string]::IsNullOrWhiteSpace($LauncherScriptPath) -or -not (Test-Path -LiteralPath $LauncherScriptPath)) {
+        return $false
+    }
+
+    $pwshCmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    $pwshExe = if ($null -ne $pwshCmd) { $pwshCmd.Source } else { Join-Path $PSHOME 'pwsh.exe' }
+
+    try {
+        Start-Process -FilePath $pwshExe -ArgumentList @(
+            '-NoProfile',
+            '-ExecutionPolicy', 'Bypass',
+            '-File', $LauncherScriptPath
+        ) -WorkingDirectory (Split-Path -Path $LauncherScriptPath -Parent) | Out-Null
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function Read-PostUpdateRelaunchChoice {
+    Write-Host ''
+    Write-Host '  Relaunch choices:' -ForegroundColor White
+    Write-Host '  ✅ [Enter] Relaunch app only' -ForegroundColor Green
+    Write-Host '           Restart the updated SystemCleanup window without touching Explorer' -ForegroundColor DarkGray
+    Write-Host '  🔄 [Any other key] Restart Explorer + relaunch app' -ForegroundColor Yellow
+    Write-Host '           Explorer shell will restart with no folder window reopened' -ForegroundColor DarkGray
+    Write-Host ''
+    Write-Host '  Choice: ' -ForegroundColor White -NoNewline
+
+    $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    if ($key.VirtualKeyCode -eq 13) {
+        Write-Host 'Enter' -ForegroundColor DarkGray
+        return 'APP_ONLY'
+    }
+
+    $keyLabel = if ($key.VirtualKeyCode -eq 27) {
+        'ESC'
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace([string]$key.Character)) {
+        [string]$key.Character
+    }
+    else {
+        "VK $($key.VirtualKeyCode)"
+    }
+
+    Write-Host $keyLabel -ForegroundColor DarkGray
+    return 'APP_AND_EXPLORER'
+}
+
+function Restart-ExplorerShellNoReopen {
+    $runningExplorer = @(Get-Process -Name explorer -ErrorAction SilentlyContinue)
+    if ($runningExplorer.Count -eq 0) {
+        Write-Host '  ℹ️ Explorer was not running, so no shell restart was needed.' -ForegroundColor DarkGray
+        return $true
+    }
+
+    try {
+        foreach ($explorerProcess in $runningExplorer) {
+            try {
+                Stop-Process -Id $explorerProcess.Id -Force -ErrorAction Stop
+            }
+            catch {}
+        }
+
+        try {
+            Wait-Process -Name explorer -Timeout 5 -ErrorAction SilentlyContinue
+        }
+        catch {}
+
+        # Do not force Start-Process explorer.exe here. Windows should auto-restore
+        # the shell, and forcing a fresh explorer instance can leave ghost/zombie
+        # processes behind on some systems.
+        $shellAlive = $false
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        do {
+            Start-Sleep -Milliseconds 300
+            if (Get-Process -Name explorer -ErrorAction SilentlyContinue) {
+                $shellAlive = $true
+            }
+        } while (-not $shellAlive -and $stopwatch.Elapsed.TotalSeconds -lt 10)
+
+        if (-not $shellAlive) {
+            Write-Host '  ⚠️ Explorer shell did not auto-restart within the timeout.' -ForegroundColor Yellow
+            Write-Host '     Please restart Explorer manually if the desktop/taskbar stay missing.' -ForegroundColor DarkGray
+            return $false
+        }
+
+        Start-Sleep -Milliseconds 500
+        Write-Host '  ✅ Explorer restarted (auto). No folder window was reopened.' -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Host '  ⚠️ Explorer restart failed. Please restart Explorer manually if needed.' -ForegroundColor Yellow
+        return $false
+    }
+}
+
 function Invoke-InstallerCoreToolUpdate {
     $state = Get-InstallerCoreUpdateState
 
@@ -829,12 +951,53 @@ function Invoke-InstallerCoreToolUpdate {
             $launcherArgs += @('-GitHubRef', $state.GitHubBranch)
         }
 
+        if ($state.Mode -eq 'Installed copy') {
+            $launcherArgs += '-NoExplorerRestart'
+        }
+
         Write-Host "`n  Launching InstallerCore update flow..." -ForegroundColor Yellow
         & $pwshExe @launcherArgs
         $exitCode = $LASTEXITCODE
     }
 
     Write-Host ""
+    $shouldRelaunchTool = ($state.Mode -eq 'Installed copy' -and $launchMode -ne 'EDIT' -and ($exitCode -eq 0 -or $exitCode -eq 2))
+    if ($shouldRelaunchTool) {
+        if ($exitCode -eq 0) {
+            Write-Host "  ✅ Update flow completed successfully." -ForegroundColor Green
+        }
+        else {
+            Write-Host "  ⚠️ Update flow completed with warnings." -ForegroundColor Yellow
+        }
+
+        $launcherScriptPath = Join-Path (Split-Path -Path $state.InstallScriptPath -Parent) 'SystemCleanup.ps1'
+        $postUpdateChoice = Read-PostUpdateRelaunchChoice
+        $restartExplorerToo = ($postUpdateChoice -eq 'APP_AND_EXPLORER')
+
+        if ($restartExplorerToo) {
+            Write-Host ''
+            Write-Host '  Restarting Explorer shell before relaunching the updated app...' -ForegroundColor Yellow
+            $null = Restart-ExplorerShellNoReopen
+        }
+        else {
+            Write-Host ''
+            Write-Host '  Relaunching the updated app without restarting Explorer...' -ForegroundColor Cyan
+        }
+
+        if (Start-SystemCleanupLauncherRelaunch -LauncherScriptPath $launcherScriptPath) {
+            if ($restartExplorerToo) {
+                Write-Host "  🔄 Restarting SystemCleanup with the updated files after the Explorer refresh..." -ForegroundColor Cyan
+            }
+            else {
+                Write-Host "  🔄 Restarting SystemCleanup with the updated files..." -ForegroundColor Cyan
+            }
+            return $script:RelaunchAndExitToken
+        }
+
+        Write-Host "  ⚠️ Update finished, but the launcher restart could not be started automatically." -ForegroundColor Yellow
+        Write-Host "     Start SystemCleanup again from the context menu to use the updated files." -ForegroundColor DarkGray
+    }
+
     if ($exitCode -eq 0) {
         Write-Host "  ✅ Update flow completed successfully." -ForegroundColor Green
         return
@@ -2383,6 +2546,12 @@ switch ($Action) {
             $skipReturnToMenu = $true
             if ($SilentCaller) {
                 Write-Output $script:SkipReturnToMenuToken
+            }
+        }
+        elseif ($toolSelfUpdateResult -eq $script:RelaunchAndExitToken) {
+            $skipReturnToMenu = $true
+            if ($SilentCaller) {
+                Write-Output $script:RelaunchAndExitToken
             }
         }
         $directActionCompleted = $true

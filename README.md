@@ -308,6 +308,8 @@ Selection: 'KB5034441'  ← hide by KB number
 - Pressing `ESC` in that self-update choice panel returns directly to the main launcher menu without the extra generic pause prompt
 - For installed copies, a successful InstallerCore `Install` / `Update` run saves the chosen `package_source` and `github_ref` into `state\install-meta.json`, so the next launcher run reuses those defaults
 - For repo copies, the default GitHub branch follows the branch currently checked out in `.git`
+- When self-update is started from an installed `SystemCleanup` session, the updater skips the old Explorer-folder reopen behavior, then asks how to come back up: `Enter = relaunch app only`, any other key = `restart Explorer + relaunch app`
+- That Explorer refresh path intentionally does **not** reopen a folder window; it only restarts the shell and then relaunches `SystemCleanup.ps1` with the same `pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ...` style used by the context-menu command
 
 This keeps updater logic aligned with `InstallerCore`, avoids duplicating the source/branch chooser inside the launcher, and makes the pattern a good blueprint for other PowerShell main-menu tools that already ship a sibling `Install.ps1`.
 

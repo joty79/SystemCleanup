@@ -13,6 +13,7 @@ $script:LogFile = ''
 $script:CachedLiveDownloadCacheLine = $null
 $script:CachedDeliveryOptimizationLine = $null
 $script:SkipReturnToMenuToken = '__SYSTEMCLEANUP_SKIP_RETURN_TO_MENU__'
+$script:RelaunchAndExitToken = '__SYSTEMCLEANUP_RELAUNCH_AND_EXIT__'
 $script:PwshExe = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) {
     (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
 }
@@ -564,7 +565,10 @@ while ($true) {
         '^7$' {
             Clear-Host
             $toolSelfUpdateResult = & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action ToolSelfUpdate -SilentCaller
-            if ($toolSelfUpdateResult -ne '__SYSTEMCLEANUP_SKIP_RETURN_TO_MENU__') {
+            if ($toolSelfUpdateResult -eq $script:RelaunchAndExitToken) {
+                break
+            }
+            if ($toolSelfUpdateResult -ne $script:SkipReturnToMenuToken) {
                 Wait-ReturnToMenu
             }
             continue
