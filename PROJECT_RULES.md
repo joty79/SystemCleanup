@@ -381,3 +381,11 @@
 - Guardrail/rule: For InstallerCore-onboarded launcher repos, prefer a launcher-level self-update shortcut that reuses the sibling `Install.ps1` instead of inventing a second updater. Detect mode generically: git repo copy -> `DownloadLatest`, installed copy with `state\install-meta.json` -> `UpdateGitHub`, portable fallback -> `DownloadLatest`. Keep the helper naming/tooling generic enough that the same pattern can later be lifted into the `InstallerCore` template or copied into other PowerShell main-menu tools.
 - Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1` and `SystemCleanup.ps1`; local non-admin status probe via `ManageUpdates.ps1 -Action ToolSelfUpdateStatus`; static review of main-menu wiring and sibling `Install.ps1` detection.
+
+### Entry - 2026-03-25 (Self-update UI must expose InstallerCore defaults, not backend action names)
+- Date: 2026-03-25
+- Problem: The first launcher self-update bridge surfaced backend action names like `UpdateGitHub` and did not offer an easy way to switch source/branch without remembering InstallerCore arguments.
+- Root cause: The launcher exposed internal action labels instead of user-facing InstallerCore terms and treated alternate source/branch selection as an implementation detail.
+- Guardrail/rule: For launcher-level self-update, present defaults using user-facing InstallerCore labels such as `Installer Mode`, `GitHub branch`, and `Local source`. Keep `Enter = use displayed defaults`, `E = open the standard sibling Install.ps1 interactive menu`, and `ESC = cancel`. Do not duplicate Local/GitHub/branch chooser logic inside the launcher when InstallerCore already owns that UI.
+- Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; local non-admin status probe via `ManageUpdates.ps1 -Action ToolSelfUpdateStatus`; static review of Enter/E/ESC flow.

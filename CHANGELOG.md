@@ -16,6 +16,7 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Compressed the automatic `DISM` / `CBS` failure summary into short human-readable clues so the output stays readable inside narrow Windows Terminal split panes.
 - Added a launcher-level self-update option `[7] Update This Tool (InstallerCore)` that reuses the sibling `Install.ps1` and auto-detects whether to run `DownloadLatest` or `UpdateGitHub`.
 - Added a live updater status probe so the main menu shows the detected InstallerCore update mode directly in the gray description line.
+- Refined the self-update screen to show user-facing InstallerCore defaults as `Installer Mode` / `GitHub branch` or `Local source`, with `Enter` using those defaults and `E` opening the standard `Install.ps1` menu for alternate Local/GitHub/branch choices.
 
 ## [2026-03-10]
 

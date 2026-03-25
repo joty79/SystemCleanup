@@ -565,8 +565,10 @@ function Get-InstallerCoreUpdateState {
         IsAvailable = $false
         InstallScriptPath = ''
         Mode = 'Unavailable'
-        RecommendedAction = ''
-        GitHubRef = ''
+        InstallerMode = 'GitHub'
+        DefaultAction = ''
+        GitHubBranch = ''
+        LocalSourcePath = ''
         StatusLine = 'InstallerCore updater unavailable'
         RelaunchesInstaller = $false
         Reason = ''
@@ -584,7 +586,8 @@ function Get-InstallerCoreUpdateState {
     $gitRoot = Join-Path $PSScriptRoot '.git'
     if (Test-Path -LiteralPath $gitRoot) {
         $state.Mode = 'Repo copy'
-        $state.RecommendedAction = 'DownloadLatest'
+        $state.InstallerMode = 'GitHub'
+        $state.DefaultAction = 'DownloadLatest'
         $state.RelaunchesInstaller = $true
 
         $gitBranch = ''
@@ -603,42 +606,58 @@ function Get-InstallerCoreUpdateState {
             catch {}
         }
 
-        $state.GitHubRef = $gitBranch
+        $state.GitHubBranch = $gitBranch
         $branchLabel = if ([string]::IsNullOrWhiteSpace($gitBranch)) { 'auto' } else { $gitBranch }
-        $state.StatusLine = "Repo copy -> DownloadLatest ($branchLabel)"
+        $state.StatusLine = "Repo copy • GitHub/$branchLabel"
         return [pscustomobject]$state
     }
 
     $metaPath = Join-Path $PSScriptRoot 'state\install-meta.json'
     if (Test-Path -LiteralPath $metaPath) {
         $state.Mode = 'Installed copy'
-        $state.RecommendedAction = 'UpdateGitHub'
+        $state.InstallerMode = 'GitHub'
+        $state.DefaultAction = 'UpdateGitHub'
 
         try {
             $meta = Get-Content -LiteralPath $metaPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-            $githubRef = ''
+            $packageSource = if ($meta.PSObject.Properties['package_source']) { ([string]$meta.package_source).Trim() } else { '' }
+            $sourcePath = if ($meta.PSObject.Properties['source_path']) { ([string]$meta.source_path).Trim() } else { '' }
+            $githubBranch = ''
             if ($meta.PSObject.Properties['github_ref'] -and -not [string]::IsNullOrWhiteSpace([string]$meta.github_ref)) {
-                $githubRef = ([string]$meta.github_ref).Trim()
+                $githubBranch = ([string]$meta.github_ref).Trim()
             }
             elseif ($meta.PSObject.Properties['source_path'] -and ([string]$meta.source_path) -match '^github://.+?@(.+)$') {
-                $githubRef = ($Matches[1]).Trim()
+                $githubBranch = ($Matches[1]).Trim()
             }
 
-            $state.GitHubRef = $githubRef
+            if ($packageSource -eq 'Local' -and -not [string]::IsNullOrWhiteSpace($sourcePath) -and -not ($sourcePath -like 'github://*')) {
+                $state.InstallerMode = 'Local'
+                $state.DefaultAction = 'Update'
+                $state.LocalSourcePath = $sourcePath
+            }
+            else {
+                $state.GitHubBranch = $githubBranch
+            }
         }
         catch {
             $state.Reason = 'install-meta.json could not be parsed; falling back to GitHub auto-detect.'
         }
 
-        $branchLabel = if ([string]::IsNullOrWhiteSpace($state.GitHubRef)) { 'auto' } else { $state.GitHubRef }
-        $state.StatusLine = "Installed copy -> UpdateGitHub ($branchLabel)"
+        if ($state.InstallerMode -eq 'Local') {
+            $state.StatusLine = 'Installed copy • Local'
+        }
+        else {
+            $branchLabel = if ([string]::IsNullOrWhiteSpace($state.GitHubBranch)) { 'auto' } else { $state.GitHubBranch }
+            $state.StatusLine = "Installed copy • GitHub/$branchLabel"
+        }
         return [pscustomobject]$state
     }
 
     $state.Mode = 'Portable copy'
-    $state.RecommendedAction = 'DownloadLatest'
+    $state.InstallerMode = 'GitHub'
+    $state.DefaultAction = 'DownloadLatest'
     $state.RelaunchesInstaller = $true
-    $state.StatusLine = 'Portable copy -> DownloadLatest (auto)'
+    $state.StatusLine = 'Portable copy • GitHub/auto'
     $state.Reason = 'No .git folder and no install-meta.json were found.'
     return [pscustomobject]$state
 }
@@ -646,6 +665,42 @@ function Get-InstallerCoreUpdateState {
 function Get-InstallerCoreUpdateStatusLine {
     $state = Get-InstallerCoreUpdateState
     return $state.StatusLine
+}
+
+function Read-InstallerCoreUpdateChoice {
+    Write-Host '  Press ' -ForegroundColor Gray -NoNewline
+    Write-Host 'Enter' -ForegroundColor White -NoNewline
+    Write-Host ' to continue with defaults, ' -ForegroundColor Gray -NoNewline
+    Write-Host 'E' -ForegroundColor White -NoNewline
+    Write-Host ' to choose other options, or ' -ForegroundColor Gray -NoNewline
+    Write-Host 'ESC' -ForegroundColor White -NoNewline
+    Write-Host ' to cancel.' -ForegroundColor Gray
+    Write-Host '  Choice: ' -ForegroundColor Gray -NoNewline
+
+    while ($true) {
+        $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+        if ($key.VirtualKeyCode -eq 13) {
+            Write-Host 'Enter' -ForegroundColor DarkGray
+            return 'DEFAULT'
+        }
+        if ($key.VirtualKeyCode -eq 27) {
+            Write-Host 'ESC' -ForegroundColor DarkGray
+            return 'ESC'
+        }
+
+        $char = [string]$key.Character
+        if ([string]::IsNullOrWhiteSpace($char)) {
+            continue
+        }
+
+        Write-Host $char
+        if ($char -match '^[Ee]$') {
+            return 'EDIT'
+        }
+
+        Write-Host '  Invalid choice. Use Enter, E, or ESC.' -ForegroundColor Yellow
+        Write-Host '  Choice: ' -ForegroundColor Gray -NoNewline
+    }
 }
 
 function Invoke-InstallerCoreToolUpdate {
@@ -663,21 +718,30 @@ function Invoke-InstallerCoreToolUpdate {
     }
 
     Write-Host "  Detected mode:      $($state.Mode)" -ForegroundColor DarkGray
-    Write-Host "  Installer action:   $($state.RecommendedAction)" -ForegroundColor DarkGray
-    if (-not [string]::IsNullOrWhiteSpace($state.GitHubRef)) {
-        Write-Host "  GitHub ref:         $($state.GitHubRef)" -ForegroundColor DarkGray
+    Write-Host "  Installer Mode:     $($state.InstallerMode)" -ForegroundColor DarkGray
+    if ($state.InstallerMode -eq 'GitHub') {
+        if (-not [string]::IsNullOrWhiteSpace($state.GitHubBranch)) {
+            Write-Host "  GitHub branch:      $($state.GitHubBranch)" -ForegroundColor DarkGray
+        }
+        else {
+            Write-Host "  GitHub branch:      auto-detect" -ForegroundColor DarkGray
+        }
     }
-    else {
-        Write-Host "  GitHub ref:         auto-detect" -ForegroundColor DarkGray
+    elseif (-not [string]::IsNullOrWhiteSpace($state.LocalSourcePath)) {
+        Write-Host "  Local source:       $($state.LocalSourcePath)" -ForegroundColor DarkGray
     }
     Write-Host "  Install.ps1 path:   $($state.InstallScriptPath)" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  ⚠️  This will update the tool via the sibling InstallerCore-generated Install.ps1." -ForegroundColor Yellow
-    if ($state.RecommendedAction -eq 'DownloadLatest') {
+    if ($state.DefaultAction -eq 'DownloadLatest') {
         Write-Host "      • Current folder will be refreshed in place from GitHub" -ForegroundColor Gray
         if ($state.RelaunchesInstaller) {
             Write-Host "      • InstallerCore may relaunch the updated installer after download" -ForegroundColor Gray
         }
+    }
+    elseif ($state.InstallerMode -eq 'Local') {
+        Write-Host "      • Installed copy under %LOCALAPPDATA% will be updated from the recorded local source" -ForegroundColor Gray
+        Write-Host "      • Use E if you want the full InstallerCore menu for GitHub/source switching" -ForegroundColor Gray
     }
     else {
         Write-Host "      • Installed copy under %LOCALAPPDATA% will be updated from GitHub" -ForegroundColor Gray
@@ -685,29 +749,39 @@ function Invoke-InstallerCoreToolUpdate {
     }
     Write-Host ""
 
-    $confirm = Read-Host "  Proceed? (Y/N)"
-    if ($confirm -notmatch '^[Yy]') {
+    $launchMode = Read-InstallerCoreUpdateChoice
+    if ($launchMode -eq 'ESC') {
         Write-Host "  Cancelled." -ForegroundColor DarkGray
         return
     }
 
     $pwshCmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue
     $pwshExe = if ($null -ne $pwshCmd) { $pwshCmd.Source } else { Join-Path $PSHOME 'pwsh.exe' }
-    $launcherArgs = @(
-        '-NoProfile',
-        '-ExecutionPolicy', 'Bypass',
-        '-File', $state.InstallScriptPath,
-        '-Action', $state.RecommendedAction,
-        '-Force'
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($state.GitHubRef)) {
-        $launcherArgs += @('-GitHubRef', $state.GitHubRef)
+    if ($launchMode -eq 'EDIT') {
+        Write-Host "`n  Opening the standard InstallerCore menu so you can choose Local/GitHub and branch options..." -ForegroundColor Yellow
+        & $pwshExe -NoProfile -ExecutionPolicy Bypass -File $state.InstallScriptPath
+        $exitCode = $LASTEXITCODE
     }
+    else {
+        $launcherArgs = @(
+            '-NoProfile',
+            '-ExecutionPolicy', 'Bypass',
+            '-File', $state.InstallScriptPath,
+            '-Action', $state.DefaultAction,
+            '-Force'
+        )
 
-    Write-Host "`n  Launching InstallerCore update flow..." -ForegroundColor Yellow
-    & $pwshExe @launcherArgs
-    $exitCode = $LASTEXITCODE
+        if ($state.InstallerMode -eq 'Local' -and -not [string]::IsNullOrWhiteSpace($state.LocalSourcePath)) {
+            $launcherArgs += @('-PackageSource', 'Local', '-SourcePath', $state.LocalSourcePath)
+        }
+        elseif ($state.InstallerMode -eq 'GitHub' -and -not [string]::IsNullOrWhiteSpace($state.GitHubBranch)) {
+            $launcherArgs += @('-GitHubRef', $state.GitHubBranch)
+        }
+
+        Write-Host "`n  Launching InstallerCore update flow..." -ForegroundColor Yellow
+        & $pwshExe @launcherArgs
+        $exitCode = $LASTEXITCODE
+    }
 
     Write-Host ""
     if ($exitCode -eq 0) {

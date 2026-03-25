@@ -217,7 +217,7 @@ echo.
 goto :Menu
 
 REM ---------------------------------------------------------
-REM OPTION 4: Windows Update Manager
+REM OPTION 5: Windows Update Manager
 REM ---------------------------------------------------------
 :ManageUpdates
 cls
@@ -231,7 +231,7 @@ echo.
 goto :Menu
 
 REM ---------------------------------------------------------
-REM OPTION 5: Last DISM/CBS Failure Details
+REM OPTION 6: Last DISM/CBS Failure Details
 REM ---------------------------------------------------------
 :DismFailureDetails
 cls
@@ -249,7 +249,7 @@ pause
 goto :Menu
 
 REM ---------------------------------------------------------
-REM OPTION 6: Delivery Optimization Cleanup + Disable
+REM OPTION 4: Delivery Optimization Cleanup + Disable
 REM ---------------------------------------------------------
 :DeliveryOptimizationCleanup
 cls

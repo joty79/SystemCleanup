@@ -299,9 +299,11 @@ Selection: 'KB5034441'  ← hide by KB number
 - If the launcher is running from a git working copy, it uses `DownloadLatest` against the current repo folder
 - If the launcher is running from an installed copy with `state\install-meta.json`, it uses `UpdateGitHub` for the installed tool
 - If the launcher is running from a portable folder, it falls back to `DownloadLatest`
-- The gray description line shows the detected update mode directly in the main menu, for example `Repo copy -> DownloadLatest (wt)` or `Installed copy -> UpdateGitHub (wt)`
+- The gray description line shows the detected updater defaults directly in the main menu, for example `Repo copy • GitHub/wt`, `Installed copy • GitHub/master`, or `Installed copy • Local`
+- The self-update screen shows the default `Installer Mode` plus either `GitHub branch` or `Local source`
+- Press `Enter` to continue with those defaults, `E` to open the normal `Install.ps1` interactive menu for Local/GitHub/branch/source selection, or `ESC` to cancel
 
-This keeps updater logic aligned with `InstallerCore`, which makes the pattern a good blueprint for other PowerShell main-menu tools that already ship a sibling `Install.ps1`.
+This keeps updater logic aligned with `InstallerCore`, avoids duplicating the source/branch chooser inside the launcher, and makes the pattern a good blueprint for other PowerShell main-menu tools that already ship a sibling `Install.ps1`.
 
 ---
 
