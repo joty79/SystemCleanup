@@ -12,6 +12,7 @@ $script:LogDir = ''
 $script:LogFile = ''
 $script:CachedLiveDownloadCacheLine = $null
 $script:CachedDeliveryOptimizationLine = $null
+$script:SkipReturnToMenuToken = '__SYSTEMCLEANUP_SKIP_RETURN_TO_MENU__'
 $script:PwshExe = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) {
     (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
 }
@@ -141,6 +142,44 @@ function Wait-ReturnToMenu {
     Write-Host ''
     Write-Host '  Press any key to return to menu...' -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+}
+
+function Read-EnterOrEscChoice {
+    param(
+        [string]$EnterLabel = 'Proceed',
+        [string]$EnterDescription = '',
+        [string]$EscLabel = 'Back to main menu'
+    )
+
+    Write-Host '  Choices:' -ForegroundColor White
+    Write-Host ("  ✅ [Enter] {0}" -f $EnterLabel) -ForegroundColor Green
+    if (-not [string]::IsNullOrWhiteSpace($EnterDescription)) {
+        Write-Host ("           {0}" -f $EnterDescription) -ForegroundColor DarkGray
+    }
+    Write-Host ("  ❌ [ESC]   {0}" -f $EscLabel) -ForegroundColor Red
+    Write-Host ''
+    Write-Host '  Choice: ' -ForegroundColor White -NoNewline
+
+    while ($true) {
+        $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+        if ($key.VirtualKeyCode -eq 13) {
+            Write-Host 'Enter' -ForegroundColor DarkGray
+            return 'ENTER'
+        }
+        if ($key.VirtualKeyCode -eq 27) {
+            Write-Host 'ESC' -ForegroundColor DarkGray
+            return 'ESC'
+        }
+
+        $char = [string]$key.Character
+        if ([string]::IsNullOrWhiteSpace($char)) {
+            continue
+        }
+
+        Write-Host $char
+        Write-Host '  Invalid choice. Use Enter or ESC.' -ForegroundColor Yellow
+        Write-Host '  Choice: ' -ForegroundColor Gray -NoNewline
+    }
 }
 
 function Get-LiveDownloadCacheStatusLine {
@@ -292,6 +331,31 @@ function Start-FullCleanupInWtPane {
 }
 
 function Invoke-FullCleanup {
+    Clear-Host
+    Write-Host ''
+    Write-Host '==========================================' -ForegroundColor Cyan
+    Write-Host '   FULL SYSTEM CLEANUP' -ForegroundColor White
+    Write-Host '==========================================' -ForegroundColor Cyan
+    Write-Host ''
+    Write-Host '  ⚠️  This will:' -ForegroundColor Yellow
+    Write-Host '      • Run the full SFC + DISM + WinSxS Temp sequence' -ForegroundColor Gray
+    Write-Host '      • Use the aggressive DISM /StartComponentCleanup /ResetBase path' -ForegroundColor Gray
+    Write-Host '      • Open a dedicated WT split pane when available' -ForegroundColor Gray
+    Write-Host '      • Take a while depending on image health and component-store size' -ForegroundColor Gray
+    Write-Host ''
+    if ([string]::IsNullOrWhiteSpace($script:LogFile)) {
+        Write-Host '  Logs: unavailable (no writable log directory found)' -ForegroundColor DarkYellow
+    }
+    else {
+        Write-Host ("  📄 Logs: {0}" -f $script:LogFile) -ForegroundColor Green
+    }
+    Write-Host ''
+    $confirm = Read-EnterOrEscChoice -EnterLabel 'Start Full Cleanup' -EnterDescription 'Run the full servicing and cleanup flow now'
+    if ($confirm -eq 'ESC') {
+        Write-Host '  Cancelled.' -ForegroundColor DarkGray
+        return $script:SkipReturnToMenuToken
+    }
+
     if (Start-FullCleanupInWtPane) {
         Write-Host ''
         Write-Host '  Full Cleanup opened in a Windows Terminal split pane.' -ForegroundColor Green
@@ -346,11 +410,38 @@ function Invoke-InFlightOnly {
     Write-Host '   INFLIGHT CLEANUP (MoveFileEx/Registry)' -ForegroundColor White
     Write-Host '==========================================' -ForegroundColor Cyan
     Write-Host ''
+    Write-Host '  ⚠️  This will:' -ForegroundColor Yellow
+    Write-Host '      • Run the standalone WinSxS Temp / InFlight cleanup path' -ForegroundColor Gray
+    Write-Host '      • Delete what it can now and schedule locked leftovers for reboot-time removal' -ForegroundColor Gray
+    Write-Host '      • Skip the SFC / DISM stages completely' -ForegroundColor Gray
+    Write-Host ''
+    $confirm = Read-EnterOrEscChoice -EnterLabel 'Run InFlight Cleanup only' -EnterDescription 'Start the standalone WinSxS Temp cleanup now'
+    if ($confirm -eq 'ESC') {
+        Write-Host '  Cancelled.' -ForegroundColor DarkGray
+        return $script:SkipReturnToMenuToken
+    }
+
     & (Join-Path $PSScriptRoot 'CleanInFlight.ps1') -SilentCaller
     Wait-ReturnToMenu
 }
 
 function Show-DetailedServicingLogs {
+    Clear-Host
+    Write-Host ''
+    Write-Host '==========================================' -ForegroundColor Cyan
+    Write-Host '   DISM / CBS FAILURE DETAILS' -ForegroundColor White
+    Write-Host '==========================================' -ForegroundColor Cyan
+    Write-Host ''
+    Write-Host '  ⚠️  This will:' -ForegroundColor Yellow
+    Write-Host '      • Open the last wider DISM / CBS failure view' -ForegroundColor Gray
+    Write-Host '      • Show recent servicing clues without running cleanup actions' -ForegroundColor Gray
+    Write-Host ''
+    $confirm = Read-EnterOrEscChoice -EnterLabel 'Open DISM / CBS failure details' -EnterDescription 'Show the last wider servicing summary now'
+    if ($confirm -eq 'ESC') {
+        Write-Host '  Cancelled.' -ForegroundColor DarkGray
+        return $script:SkipReturnToMenuToken
+    }
+
     Clear-Host
     Write-Host ''
     Write-Host '==========================================' -ForegroundColor Cyan
@@ -369,6 +460,28 @@ function Show-DetailedServicingLogs {
     }
 
     Wait-ReturnToMenu
+}
+
+function Open-WindowsUpdateManager {
+    Clear-Host
+    Write-Host ''
+    Write-Host '==========================================' -ForegroundColor Cyan
+    Write-Host '   WINDOWS UPDATE MANAGER' -ForegroundColor White
+    Write-Host '==========================================' -ForegroundColor Cyan
+    Write-Host ''
+    Write-Host '  ⚠️  This will:' -ForegroundColor Yellow
+    Write-Host '      • Open the Windows Update Manager submenu' -ForegroundColor Gray
+    Write-Host '      • Let you list/hide/unhide updates, reset cache, and block Win11' -ForegroundColor Gray
+    Write-Host '      • Not start update changes until you choose a submenu action there' -ForegroundColor Gray
+    Write-Host ''
+    $confirm = Read-EnterOrEscChoice -EnterLabel 'Open Windows Update Manager' -EnterDescription 'Enter the update-management submenu now'
+    if ($confirm -eq 'ESC') {
+        Write-Host '  Cancelled.' -ForegroundColor DarkGray
+        return $script:SkipReturnToMenuToken
+    }
+
+    Clear-Host
+    & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action Menu -SilentCaller
 }
 
 function Show-MainMenu {
@@ -429,36 +542,40 @@ while ($true) {
     switch -Regex ($choice) {
         '^1$' {
             Clear-Host
-            Invoke-FullCleanup
+            [void](Invoke-FullCleanup)
             continue
         }
         '^2$' {
             Clear-Host
-            Invoke-InFlightOnly
+            [void](Invoke-InFlightOnly)
             continue
         }
         '^3$' {
             Clear-Host
-            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action LiveCleanup -SilentCaller
-            $script:CachedLiveDownloadCacheLine = Get-LiveDownloadCacheStatusLine
-            Wait-ReturnToMenu
+            $liveCleanupResult = & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action LiveCleanup -SilentCaller
+            if ($liveCleanupResult -ne $script:SkipReturnToMenuToken) {
+                $script:CachedLiveDownloadCacheLine = Get-LiveDownloadCacheStatusLine
+                Wait-ReturnToMenu
+            }
             continue
         }
         '^4$' {
             Clear-Host
-            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DeliveryOptimizationCleanup -SilentCaller
-            $script:CachedDeliveryOptimizationLine = Get-DeliveryOptimizationStatusLine
-            Wait-ReturnToMenu
+            $deliveryOptimizationResult = & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DeliveryOptimizationCleanup -SilentCaller
+            if ($deliveryOptimizationResult -ne '__SYSTEMCLEANUP_SKIP_RETURN_TO_MENU__') {
+                $script:CachedDeliveryOptimizationLine = Get-DeliveryOptimizationStatusLine
+                Wait-ReturnToMenu
+            }
             continue
         }
         '^5$' {
             Clear-Host
-            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action Menu -SilentCaller
+            [void](Open-WindowsUpdateManager)
             continue
         }
         '^6$' {
             Clear-Host
-            Show-DetailedServicingLogs
+            [void](Show-DetailedServicingLogs)
             continue
         }
         '^7$' {

@@ -61,6 +61,8 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 
 Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. The main `Full Cleanup` flow now uses `dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase`, so superseded component versions are reclaimed immediately instead of waiting for the plain 30-day cleanup window. After any option completes, the tool **returns to the main menu** — only `ESC` exits the CMD launcher.
 
+The main-menu actions now open a confirmation panel first, so entering `[1]` / `[2]` / `[3]` / `[4]` / `[5]` / `[6]` / `[7]` does not immediately start work. The primary pattern is `Enter = start/open`, `ESC = back to main menu`.
+
 `/ResetBase` is intentionally more aggressive: after that step, older superseded component versions are no longer uninstallable.
 
 When a `DISM` step fails, the launcher also prints the native exit code, points directly to `C:\Windows\Logs\DISM\dism.log` and `C:\Windows\Logs\CBS\CBS.log`, and shows a short ranked summary of the most relevant recent `DISM` / `CBS` clues in a compact format that remains readable in narrow Windows Terminal panes.
@@ -168,6 +170,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\CleanInFlight.ps1 -SilentCaller
 - The action uses the native `Delete-DeliveryOptimizationCache` cmdlet instead of manually deleting random files
 - Safe disable is implemented as `DODownloadMode = 0 (CdnOnly)`, which disables peer-to-peer caching while still allowing normal Windows Update / Microsoft Store downloads
 - The tool also shows the effective mode/provider and the working cache path so VM testing is easier
+- The confirmation step now follows the same cleaner interaction blueprint as the self-update panel: `Enter` runs the action, `ESC` cancels back to the main menu, and the active Delivery Optimization values are highlighted in bright green
 
 This is intentionally **not** implemented as `Disable-Service DoSvc`, because that is a riskier way to interfere with the Delivery Optimization stack than simply forcing peer-sharing off.
 

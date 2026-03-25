@@ -21,6 +21,8 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Reduced main-menu delay by caching the expensive live status lines for `Live SoftwareDistribution Cleanup` and `Delivery Optimization Cleanup + Disable` after the first menu render, then refreshing only after those actions actually run.
 - Changed self-update `ESC` cancel handling so it returns straight to the main menu instead of stopping on the generic `Press any key to return to menu...` pause.
 - Cleared the main-menu screen before launching each main-menu action and highlighted the active self-update values (`Detected mode`, `Installer Mode`, `GitHub branch` / `Local source`) in bright green with clearer icons.
+- Applied the same Enter/ESC interaction blueprint to `Delivery Optimization Cleanup + Disable`, replacing the old `Proceed? (Y/N)` prompt and highlighting the active Delivery Optimization values in bright green.
+- Extended the safe Enter/ESC confirmation pattern across the main menu so `Full Cleanup`, `InFlight Cleanup`, `Live SoftwareDistribution Cleanup`, `Windows Update Manager`, and `Last DISM/CBS Failure Details` now open a confirmation panel before starting/opening.
 
 ## [2026-03-10]
 

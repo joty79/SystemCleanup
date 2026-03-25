@@ -705,6 +705,44 @@ function Read-InstallerCoreUpdateChoice {
     }
 }
 
+function Read-EnterOrEscChoice {
+    param(
+        [string]$EnterLabel = 'Proceed',
+        [string]$EnterDescription = '',
+        [string]$EscLabel = 'Cancel'
+    )
+
+    Write-Host '  Choices:' -ForegroundColor White
+    Write-Host ("  ✅ [Enter] {0}" -f $EnterLabel) -ForegroundColor Green
+    if (-not [string]::IsNullOrWhiteSpace($EnterDescription)) {
+        Write-Host ("           {0}" -f $EnterDescription) -ForegroundColor DarkGray
+    }
+    Write-Host ("  ❌ [ESC]   {0}" -f $EscLabel) -ForegroundColor Red
+    Write-Host ''
+    Write-Host '  Choice: ' -ForegroundColor White -NoNewline
+
+    while ($true) {
+        $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+        if ($key.VirtualKeyCode -eq 13) {
+            Write-Host 'Enter' -ForegroundColor DarkGray
+            return 'ENTER'
+        }
+        if ($key.VirtualKeyCode -eq 27) {
+            Write-Host 'ESC' -ForegroundColor DarkGray
+            return 'ESC'
+        }
+
+        $char = [string]$key.Character
+        if ([string]::IsNullOrWhiteSpace($char)) {
+            continue
+        }
+
+        Write-Host $char
+        Write-Host '  Invalid choice. Use Enter or ESC.' -ForegroundColor Yellow
+        Write-Host '  Choice: ' -ForegroundColor Gray -NoNewline
+    }
+}
+
 function Invoke-InstallerCoreToolUpdate {
     $state = Get-InstallerCoreUpdateState
 
@@ -874,22 +912,28 @@ function Invoke-DeliveryOptimizationCleanupAndDisable {
     else {
         Write-Host "UNKNOWN ⚠️" -ForegroundColor Yellow
     }
-    Write-Host "      Mode:          $($before.DownloadMode)" -ForegroundColor DarkGray
-    Write-Host "      Provider:      $($before.DownloadModeProvider)" -ForegroundColor DarkGray
-    Write-Host "      Cache size:    $($before.CacheSizeLabel)" -ForegroundColor DarkGray
-    Write-Host "      Cache files:   $($before.Files)" -ForegroundColor DarkGray
+    Write-Host '      ⚙️  Mode:       ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $before.DownloadMode -ForegroundColor Green
+    Write-Host '      🧩 Provider:   ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $before.DownloadModeProvider -ForegroundColor Green
+    Write-Host '      💾 Cache size: ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $before.CacheSizeLabel -ForegroundColor Green
+    Write-Host '      📦 Cache files:' -ForegroundColor DarkGray -NoNewline
+    Write-Host (" {0}" -f $before.Files) -ForegroundColor Green
     if (-not [string]::IsNullOrWhiteSpace($before.WorkingDirectory)) {
-        Write-Host "      Cache path:    $($before.WorkingDirectory)" -ForegroundColor DarkGray
+        Write-Host '      📁 Cache path: ' -ForegroundColor DarkGray -NoNewline
+        Write-Host $before.WorkingDirectory -ForegroundColor Green
     }
     if ($null -ne $before.PolicyDownloadMode) {
-        Write-Host "      Policy mode:   $($before.PolicyDownloadMode)" -ForegroundColor DarkGray
+        Write-Host '      🛡️  Policy mode:' -ForegroundColor DarkGray -NoNewline
+        Write-Host (" {0}" -f $before.PolicyDownloadMode) -ForegroundColor Green
     }
     Write-Host ""
 
-    $confirm = Read-Host "  Proceed? (Y/N)"
-    if ($confirm -notmatch '^[Yy]') {
+    $confirm = Read-EnterOrEscChoice -EnterLabel 'Run Delivery Optimization cleanup + disable' -EnterDescription 'Clear cache and apply the safe peer-disable policy' -EscLabel 'Back to main menu'
+    if ($confirm -eq 'ESC') {
         Write-Host "  Cancelled." -ForegroundColor DarkGray
-        return
+        return $script:SkipReturnToMenuToken
     }
 
     Write-Host "`n  Clearing Delivery Optimization cache..." -ForegroundColor Yellow
@@ -932,11 +976,15 @@ function Invoke-DeliveryOptimizationCleanupAndDisable {
     else {
         Write-Host "UNKNOWN ⚠️" -ForegroundColor Yellow
     }
-    Write-Host "      Mode:          $($after.DownloadMode)" -ForegroundColor DarkGray
-    Write-Host "      Provider:      $($after.DownloadModeProvider)" -ForegroundColor DarkGray
-    Write-Host "      Cache size:    $($after.CacheSizeLabel)" -ForegroundColor DarkGray
+    Write-Host '      ⚙️  Mode:       ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $after.DownloadMode -ForegroundColor Green
+    Write-Host '      🧩 Provider:   ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $after.DownloadModeProvider -ForegroundColor Green
+    Write-Host '      💾 Cache size: ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $after.CacheSizeLabel -ForegroundColor Green
     if ($null -ne $after.PolicyDownloadMode) {
-        Write-Host "      Policy mode:   $($after.PolicyDownloadMode)" -ForegroundColor DarkGray
+        Write-Host '      🛡️  Policy mode:' -ForegroundColor DarkGray -NoNewline
+        Write-Host (" {0}" -f $after.PolicyDownloadMode) -ForegroundColor Green
     }
     Write-Host ""
     Write-Host "  💡 Safe disable here means peer-to-peer Delivery Optimization is off." -ForegroundColor Cyan
@@ -1760,10 +1808,10 @@ function Remove-LiveSoftwareDistributionDownload {
     Write-Host "  Current Download cache size: $beforeSizeMB MB" -ForegroundColor Gray
     Write-Host ""
 
-    $confirm = Read-Host "  Proceed? (Y/N)"
-    if ($confirm -notmatch '^[Yy]') {
+    $confirm = Read-EnterOrEscChoice -EnterLabel 'Run Live SoftwareDistribution cleanup' -EnterDescription 'Clean the live Download cache and restart services safely' -EscLabel 'Back to main menu'
+    if ($confirm -eq 'ESC') {
         Write-Host "  Cancelled." -ForegroundColor DarkGray
-        return
+        return $script:SkipReturnToMenuToken
     }
 
     $children = @(Get-ChildItem -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue)
@@ -2310,11 +2358,23 @@ switch ($Action) {
         return
     }
     'LiveCleanup' {
-        Remove-LiveSoftwareDistributionDownload
+        $liveCleanupResult = Remove-LiveSoftwareDistributionDownload
+        if ($liveCleanupResult -eq $script:SkipReturnToMenuToken) {
+            $skipReturnToMenu = $true
+            if ($SilentCaller) {
+                Write-Output $script:SkipReturnToMenuToken
+            }
+        }
         $directActionCompleted = $true
     }
     'DeliveryOptimizationCleanup' {
-        Invoke-DeliveryOptimizationCleanupAndDisable
+        $deliveryOptimizationResult = Invoke-DeliveryOptimizationCleanupAndDisable
+        if ($deliveryOptimizationResult -eq $script:SkipReturnToMenuToken) {
+            $skipReturnToMenu = $true
+            if ($SilentCaller) {
+                Write-Output $script:SkipReturnToMenuToken
+            }
+        }
         $directActionCompleted = $true
     }
     'ToolSelfUpdate' {

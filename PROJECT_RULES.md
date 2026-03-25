@@ -421,3 +421,19 @@
 - Guardrail/rule: Treat main-menu actions as full-screen panels. Clear the launcher view before dispatching each option, and keep direct-action functions (`Live SoftwareDistribution Cleanup`, `Delivery Optimization Cleanup + Disable`, `Tool Self-Update`) defensive by clearing their own screen too. Highlight the active self-update values (`Detected mode`, `Installer Mode`, `GitHub branch` / `Local source`) with bright value colors so the eye lands on the important state immediately.
 - Files affected: `SystemCleanup.ps1`, `ManageUpdates.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1` and `SystemCleanup.ps1`; static review of main-menu dispatch flow and self-update panel rendering.
+
+### Entry - 2026-03-25 (Use the self-update Enter/ESC choice blueprint for Delivery Optimization too)
+- Date: 2026-03-25
+- Problem: `Delivery Optimization Cleanup + Disable` still used a plain `Proceed? (Y/N)` prompt, which felt inconsistent next to the newer self-update panel and did not support the same clean `ESC` cancel behavior.
+- Root cause: The newer choice-panel pattern had only been applied to the updater flow, leaving the Delivery Optimization action on the older text prompt style.
+- Guardrail/rule: Reuse the same Enter/ESC choice blueprint for Delivery Optimization confirmation: `Enter` runs the action, `ESC` returns to the main menu, and the active Delivery Optimization values (`Mode`, `Provider`, `Cache size`, `Cache path`, `Policy mode`) should be rendered with bright value colors so the eye lands on the live state quickly.
+- Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1` and `SystemCleanup.ps1`; static review of the Delivery Optimization confirmation flow.
+
+### Entry - 2026-03-25 (All primary main-menu actions should require Enter to start)
+- Date: 2026-03-25
+- Problem: Entering several main-menu options could immediately launch work or jump into a submenu, which made the top-level menu feel risky to navigate casually.
+- Root cause: Confirmation UX had been added incrementally to a few actions only, leaving the main menu inconsistent.
+- Guardrail/rule: Treat the primary `SystemCleanup` main-menu actions as two-step entries. `[1]`, `[2]`, `[3]`, `[4]`, `[5]`, `[6]`, and `[7]` should first open a confirmation/opening panel that uses the same `Enter = start/open` and `ESC = back to main menu` blueprint. Do not start the action directly from a single top-level keypress.
+- Files affected: `SystemCleanup.ps1`, `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and `ManageUpdates.ps1`; static review of all main-menu dispatch paths.
