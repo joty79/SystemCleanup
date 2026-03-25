@@ -92,6 +92,7 @@ if "!STEPEXIT!"=="0" (
     echo    %cGray%CBS log:  C:\Windows\Logs\CBS\CBS.log%cReset%
     echo    %cYellow%Hint: Error 3 / 0x80070003 often means a missing servicing path under WinSxS\Temp\InFlight.%cReset%
     echo    %cYellow%Hint: stripped/custom Windows images may fail RestoreHealth even when SFC is clean.%cReset%
+    pwsh.exe -NoProfile -ExecutionPolicy Bypass -File "%SCRIPTROOT%ManageUpdates.ps1" -Action DismFailureSummary -SilentCaller
   )
   call :WriteLog "FAILED: !STEPTITLE! - Code: !STEPEXIT!"
 )

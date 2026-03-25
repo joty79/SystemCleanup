@@ -333,3 +333,11 @@
 - Guardrail/rule: When a `DISM` stage fails, print the native exit code in the console, point directly to `C:\Windows\Logs\DISM\dism.log` and `C:\Windows\Logs\CBS\CBS.log`, and include a short hint for `Error 3 / 0x80070003` servicing-path failures. Keep this behavior aligned across `SystemCleanup.ps1`, `SystemCleanup.cmd`, and `FullCleanup.cmd`.
 - Files affected: `SystemCleanup.ps1`, `SystemCleanup.cmd`, `FullCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of CMD/PowerShell DISM failure messaging.
+
+### Entry - 2026-03-25 (Surface recent DISM/CBS error lines after DISM failure)
+- Date: 2026-03-25
+- Problem: Even after adding exit-code/log-path hints, users still had to open `dism.log` and `CBS.log` manually to see the actual failure lines, slowing diagnosis on VMs and custom images.
+- Root cause: The launcher exposed where the logs were, but not the most relevant recent `DISM` / `CBS` lines that explain the failure.
+- Guardrail/rule: After a `DISM` stage fails, automatically print a short tail of recent relevant `DISM` and `CBS` log lines in the console. Keep the summary concise and aligned across `SystemCleanup.ps1`, `SystemCleanup.cmd`, and `FullCleanup.cmd` by using the shared `ManageUpdates.ps1` action.
+- Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `SystemCleanup.cmd`, `FullCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and `ManageUpdates.ps1`; static review of shared log-summary invocation.

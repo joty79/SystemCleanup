@@ -61,7 +61,7 @@ Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`
 
 `/ResetBase` is intentionally more aggressive: after that step, older superseded component versions are no longer uninstallable.
 
-When a `DISM` step fails, the launcher also prints the native exit code and points directly to `C:\Windows\Logs\DISM\dism.log` and `C:\Windows\Logs\CBS\CBS.log` so VM/custom-image servicing failures are easier to diagnose.
+When a `DISM` step fails, the launcher also prints the native exit code, points directly to `C:\Windows\Logs\DISM\dism.log` and `C:\Windows\Logs\CBS\CBS.log`, and shows a short tail of the most relevant recent `DISM` / `CBS` error lines so VM/custom-image servicing failures are easier to diagnose.
 
 On the experimental `wt` branch, the main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing. In WT sessions, `Full Cleanup` opens in a dedicated split pane and runs through `cmd.exe`, preserving the familiar native `% progress` display for `SFC` and `DISM`.
 

@@ -286,5 +286,6 @@ if not errorlevel 1 (
     echo    %cGray%CBS log:  C:\Windows\Logs\CBS\CBS.log%cReset%
     echo    %cYellow%Hint: Error 3 / 0x80070003 often means a missing servicing path under WinSxS\Temp\InFlight.%cReset%
     echo    %cYellow%Hint: stripped/custom Windows images may fail RestoreHealth even when SFC is clean.%cReset%
+    "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DismFailureSummary -SilentCaller
 )
 exit /b

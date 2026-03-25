@@ -4,7 +4,7 @@
 
 param(
     [switch]$SilentCaller,
-    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus', 'ReadMainMenuChoice')]
+    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus', 'ReadMainMenuChoice', 'DismFailureSummary')]
     [string]$Action = 'Menu'
 )
 
@@ -36,6 +36,76 @@ function Read-MenuKey {
 function Wait-ReturnToMenu {
     Write-Host "`n  Press any key to return to menu..." -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+}
+
+function Get-RecentServicingLogLines {
+    param(
+        [string]$Path,
+        [string]$Label,
+        [string[]]$Patterns,
+        [int]$TailCount = 250,
+        [int]$MaxLines = 4
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return @("  [$Label] Log not found: $Path")
+    }
+
+    try {
+        $recentLines = Get-Content -LiteralPath $Path -Tail $TailCount -ErrorAction Stop
+    }
+    catch {
+        return @("  [$Label] Unable to read log: $Path")
+    }
+
+    $matchedLines = @(
+        foreach ($recentLine in $recentLines) {
+            foreach ($pattern in $Patterns) {
+                if ($recentLine -match $pattern) {
+                    $recentLine
+                    break
+                }
+            }
+        }
+    )
+
+    if (@($matchedLines).Count -eq 0) {
+        return @("  [$Label] No matching recent error lines found in the last $TailCount lines.")
+    }
+
+    $matchedLines = @($matchedLines | Select-Object -Last $MaxLines)
+
+    return @(
+        foreach ($matchedLine in $matchedLines) {
+            "  [$Label] $matchedLine"
+        }
+    )
+}
+
+function Show-DismFailureSummary {
+    $dismLogPath = Join-Path $env:WINDIR 'Logs\DISM\dism.log'
+    $cbsLogPath = Join-Path $env:WINDIR 'Logs\CBS\CBS.log'
+
+    $summaryLines = @()
+    $summaryLines += '  Recent servicing log lines:'
+    $summaryLines += Get-RecentServicingLogLines -Path $dismLogPath -Label 'DISM' -Patterns @(
+        'Error',
+        'HRESULT',
+        'RestoreHealth',
+        '0x80070003',
+        'path specified',
+        'Failed'
+    )
+    $summaryLines += Get-RecentServicingLogLines -Path $cbsLogPath -Label 'CBS' -Patterns @(
+        'Error',
+        'ERROR_PATH_NOT_FOUND',
+        '0x80070003',
+        'RBDSTAMIL99',
+        'InFlight',
+        'Failed'
+    )
+
+    $summaryLines | Write-Output
 }
 
 function Format-CleanMgrSlotValueName {
@@ -1537,6 +1607,10 @@ switch ($Action) {
     }
     'LiveCleanupStatus' {
         Write-Output (Get-LiveDownloadCacheStatusLine)
+        return
+    }
+    'DismFailureSummary' {
+        Show-DismFailureSummary
         return
     }
     'LiveCleanup' {

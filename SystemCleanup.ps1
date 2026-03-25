@@ -171,6 +171,12 @@ function Show-NativeFailureDetails {
         Write-Host '  CBS log:  C:\Windows\Logs\CBS\CBS.log' -ForegroundColor DarkGray
         Write-Host '  Hint: Error 3 / 0x80070003 often means a missing servicing path under WinSxS\Temp\InFlight.' -ForegroundColor DarkYellow
         Write-Host '  Hint: stripped/custom Windows images may fail RestoreHealth even when SFC is clean.' -ForegroundColor DarkYellow
+        try {
+            & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DismFailureSummary -SilentCaller
+        }
+        catch {
+            Write-Host '  Recent servicing log lines: unavailable.' -ForegroundColor DarkGray
+        }
     }
 }
 
