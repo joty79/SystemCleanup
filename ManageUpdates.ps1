@@ -838,12 +838,10 @@ function Start-SystemCleanupLauncherRelaunch {
     $windowHandleValue = if ($windowHandleToClose -eq [IntPtr]::Zero) { 0 } else { $windowHandleToClose.ToInt64() }
     $helperPath = Join-Path $env:TEMP ("SystemCleanup_relaunch_{0}.cmd" -f [guid]::NewGuid().ToString('N'))
     $helperContent = [System.Collections.Generic.List[string]]::new()
-    [void]$helperContent.AddRange(@(
-        '@echo off',
-        'setlocal',
-        'timeout /t 1 /nobreak >nul',
-        'set "WT_SESSION="'
-    ))
+    [void]$helperContent.Add('@echo off')
+    [void]$helperContent.Add('setlocal')
+    [void]$helperContent.Add('timeout /t 1 /nobreak >nul')
+    [void]$helperContent.Add('set "WT_SESSION="')
 
     if (-not [string]::IsNullOrWhiteSpace($wtExe)) {
         [void]$helperContent.Add(
