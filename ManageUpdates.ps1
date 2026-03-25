@@ -4,7 +4,7 @@
 
 param(
     [switch]$SilentCaller,
-    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus', 'ReadMainMenuChoice', 'DismFailureSummary')]
+    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus', 'ReadMainMenuChoice', 'DismFailureSummary', 'DismFailureSummaryFull')]
     [string]$Action = 'Menu'
 )
 
@@ -38,12 +38,109 @@ function Wait-ReturnToMenu {
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
 }
 
+function Shorten-ServicingPath {
+    param(
+        [string]$Path,
+        [int]$MaxLength = 78
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return ''
+    }
+
+    if ($Path.Length -le $MaxLength) {
+        return $Path
+    }
+
+    $leafName = Split-Path -Path $Path -Leaf
+    $leafLength = [Math]::Min($leafName.Length, 28)
+    $trimmedLeaf = if ($leafName.Length -gt $leafLength) { $leafName.Substring($leafName.Length - $leafLength) } else { $leafName }
+
+    if ($Path -match '^(.*?\\InFlight\\)[^\\]+(\\.*)$') {
+        $shortened = '{0}...{1}' -f $Matches[1], $Matches[2]
+        if ($shortened.Length -le $MaxLength) {
+            return $shortened
+        }
+    }
+
+    $prefixLength = [Math]::Max(12, $MaxLength - $trimmedLeaf.Length - 3)
+    $prefix = $Path.Substring(0, [Math]::Min($prefixLength, $Path.Length))
+    return '{0}...{1}' -f $prefix, $trimmedLeaf
+}
+
+function Convert-ServicingLogLineToSummary {
+    param(
+        [string]$Label,
+        [string]$Line,
+        [switch]$Compact
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Line)) {
+        return ''
+    }
+
+    if (-not $Compact) {
+        $trimmedLine = ($Line -replace '^\S+\s+\S+\s+', '').Trim()
+        if ($trimmedLine.Length -gt 220) {
+            $trimmedLine = $trimmedLine.Substring(0, 217) + '...'
+        }
+        return "  [$Label] $trimmedLine"
+    }
+
+    if ($Label -eq 'DISM') {
+        if ($Line -match 'CBS HRESULT=([0-9A-Fx]+)') {
+            return "  [DISM] CBS error surfaced to DISM ($($Matches[1]))."
+        }
+        if ($Line -match 'Failed processing package changes with session option CbsSessionOptionRepairStoreCorruption') {
+            if ($Line -match 'hr:([0-9A-Fx]+)') {
+                return "  [DISM] RestoreHealth repair transaction failed ($($Matches[1]))."
+            }
+            return '  [DISM] RestoreHealth repair transaction failed.'
+        }
+        if ($Line -match 'Failed to restore the image health') {
+            if ($Line -match 'hr:([0-9A-Fx]+)') {
+                return "  [DISM] Failed to restore the image health ($($Matches[1]))."
+            }
+            return '  [DISM] Failed to restore the image health.'
+        }
+        if ($Line -match 'HRESULT=([0-9A-Fx]+)') {
+            return "  [DISM] DISM command failed (HRESULT=$($Matches[1]))."
+        }
+        if ($Line -match 'FindFirstFile failed for \[(.+?)\]') {
+            return "  [DISM] Missing path probe: $(Shorten-ServicingPath -Path $Matches[1])."
+        }
+    }
+
+    if ($Label -eq 'CBS') {
+        if ($Line -match "on:\[\d+\]'([^']+)'") {
+            $shortPath = Shorten-ServicingPath -Path $Matches[1]
+            return "  [CBS] Missing servicing path: $shortPath"
+        }
+        if ($Line -match 'STATUS_OBJECT_PATH_NOT_FOUND') {
+            return '  [CBS] STATUS_OBJECT_PATH_NOT_FOUND while opening a servicing path.'
+        }
+        if ($Line -match 'ERROR_PATH_NOT_FOUND') {
+            return '  [CBS] CBS reported ERROR_PATH_NOT_FOUND (0x80070003).'
+        }
+        if ($Line -match 'RBDSTAMIL99\.dic') {
+            return '  [CBS] Tamil dictionary component appears in the failing transaction.'
+        }
+    }
+
+    $trimmedLine = ($Line -replace '^\S+\s+\S+\s+', '').Trim()
+    if ($trimmedLine.Length -gt 110) {
+        $trimmedLine = $trimmedLine.Substring(0, 107) + '...'
+    }
+    return "  [$Label] $trimmedLine"
+}
+
 function Get-RecentServicingLogLines {
     param(
         [string]$Path,
         [string]$Label,
         [string[]]$Patterns,
         [string[]]$PriorityPatterns = @(),
+        [switch]$Compact,
         [int]$TailCount = 250,
         [int]$MaxLines = 4
     )
@@ -108,17 +205,19 @@ function Get-RecentServicingLogLines {
 
     return @(
         foreach ($matchedLine in $matchedLines) {
-            "  [$Label] $($matchedLine.Text)"
+            Convert-ServicingLogLineToSummary -Label $Label -Line $matchedLine.Text -Compact:$Compact
         }
     )
 }
 
 function Show-DismFailureSummary {
+    param([switch]$Compact)
+
     $dismLogPath = Join-Path $env:WINDIR 'Logs\DISM\dism.log'
     $cbsLogPath = Join-Path $env:WINDIR 'Logs\CBS\CBS.log'
 
     $summaryLines = @()
-    $summaryLines += '  Recent servicing log lines:'
+    $summaryLines += if ($Compact) { '  Recent servicing log lines:' } else { '  Detailed servicing log lines:' }
     $summaryLines += Get-RecentServicingLogLines -Path $dismLogPath -Label 'DISM' -Patterns @(
         'Error',
         'HRESULT',
@@ -132,7 +231,7 @@ function Show-DismFailureSummary {
         'HRESULT=80070003',
         '0x80070003',
         'path specified'
-    ) -TailCount 400
+    ) -Compact:$Compact -TailCount 400 -MaxLines $(if ($Compact) { 4 } else { 6 })
     $summaryLines += Get-RecentServicingLogLines -Path $cbsLogPath -Label 'CBS' -Patterns @(
         'Error',
         'ERROR_PATH_NOT_FOUND',
@@ -146,7 +245,7 @@ function Show-DismFailureSummary {
         'STATUS_OBJECT_PATH_NOT_FOUND',
         'ERROR_PATH_NOT_FOUND',
         'Error'
-    ) -TailCount 600
+    ) -Compact:$Compact -TailCount 600 -MaxLines $(if ($Compact) { 4 } else { 6 })
 
     $summaryLines | Write-Output
 }
@@ -1653,6 +1752,10 @@ switch ($Action) {
         return
     }
     'DismFailureSummary' {
+        Show-DismFailureSummary -Compact
+        return
+    }
+    'DismFailureSummaryFull' {
         Show-DismFailureSummary
         return
     }

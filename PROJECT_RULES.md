@@ -349,3 +349,19 @@
 - Guardrail/rule: Rank recent `DISM`/`CBS` matches so root-cause clues like `RBDSTAMIL99`, `WinSxS\Temp\InFlight`, `STATUS_OBJECT_PATH_NOT_FOUND`, and `ERROR_PATH_NOT_FOUND` appear before generic finalize noise. Keep the output short, but prefer specificity over recency.
 - Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; local invocation of `ManageUpdates.ps1 -Action DismFailureSummary`.
+
+### Entry - 2026-03-25 (Keep DISM/CBS failure clues narrow-pane friendly)
+- Date: 2026-03-25
+- Problem: Even prioritized raw log lines still looked bad in narrow Windows Terminal split panes because long `DISM` / `CBS` records wrapped across many console rows.
+- Root cause: The summary still echoed full log lines instead of compact human-readable clues.
+- Guardrail/rule: For the automatic `DISM` failure summary, prefer concise clue lines over raw log lines. Extract the missing path, HRESULT, or action summary when possible, and shorten long `InFlight` paths so the output remains readable in WT split panes.
+- Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; local invocation of `ManageUpdates.ps1 -Action DismFailureSummary`.
+
+### Entry - 2026-03-25 (Expose non-compact servicing details from the main menu)
+- Date: 2026-03-25
+- Problem: The compact `WT`-friendly `DISM` failure summary works well in split panes, but users still need an easy way to open a wider non-compact servicing log view from the main menu.
+- Root cause: The launcher only exposed the compact on-failure summary and had no dedicated main-menu route for a wider `DISM` / `CBS` detail view.
+- Guardrail/rule: Keep the on-failure `DISM`/`CBS` summary compact for split panes, and also expose a main-menu option `[5] Last DISM/CBS Failure Details` that shows a wider non-compact recent servicing log view. Keep this aligned across `SystemCleanup.ps1`, `SystemCleanup.cmd`, and the shared `ManageUpdates.ps1` action set.
+- Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and `ManageUpdates.ps1`; static review of main-menu numbering and shared action wiring.

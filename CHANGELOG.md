@@ -13,6 +13,8 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Expanded `DISM` failure output so the launcher now prints the native exit code, points directly to `dism.log` / `CBS.log`, and gives a targeted hint for `Error 3 / 0x80070003` servicing-path failures.
 - Added a short `DISM` / `CBS` log summary to `DISM` failure output so the launcher now surfaces the most relevant recent error lines automatically after a failed servicing step.
 - Refined the `CBS`/`DISM` log summary ranking so missing-path clues such as `InFlight`, `STATUS_OBJECT_PATH_NOT_FOUND`, and `RBDSTAMIL99` are prioritized ahead of low-signal finalize noise.
+- Compressed the automatic `DISM` / `CBS` failure summary into short human-readable clues so the output stays readable inside narrow Windows Terminal split panes.
+- Added a new main-menu option `[5] Last DISM/CBS Failure Details` that shows a wider non-compact servicing log view outside the WT split-pane flow.
 
 ## [2026-03-10]
 

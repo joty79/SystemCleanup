@@ -118,7 +118,7 @@ function Write-Log {
 }
 
 function Read-MainMenuKey {
-    Write-Host '  Enter choice (1/2/3/4/ESC): ' -ForegroundColor White -NoNewline
+    Write-Host '  Enter choice (1/2/3/4/5/ESC): ' -ForegroundColor White -NoNewline
     $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     if ($key.VirtualKeyCode -eq 27) {
         Write-Host 'ESC' -ForegroundColor DarkGray
@@ -328,6 +328,27 @@ function Invoke-InFlightOnly {
     Wait-ReturnToMenu
 }
 
+function Show-DetailedServicingLogs {
+    Clear-Host
+    Write-Host ''
+    Write-Host '==========================================' -ForegroundColor Cyan
+    Write-Host '   DISM / CBS FAILURE DETAILS' -ForegroundColor White
+    Write-Host '==========================================' -ForegroundColor Cyan
+    Write-Host ''
+    Write-Host '  DISM log: C:\Windows\Logs\DISM\dism.log' -ForegroundColor DarkGray
+    Write-Host '  CBS log:  C:\Windows\Logs\CBS\CBS.log' -ForegroundColor DarkGray
+    Write-Host ''
+
+    try {
+        & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DismFailureSummaryFull -SilentCaller
+    }
+    catch {
+        Write-Host '  Unable to read recent servicing log lines.' -ForegroundColor Yellow
+    }
+
+    Wait-ReturnToMenu
+}
+
 function Show-MainMenu {
     Clear-Host
     $liveDownloadCacheLine = Get-LiveDownloadCacheStatusLine
@@ -350,6 +371,9 @@ function Show-MainMenu {
     Write-Host ''
     Write-Host '   [ 4 ] Windows Update Manager' -ForegroundColor Blue
     Write-Host '         Hide/unhide/list updates, reset cache, block Win11' -ForegroundColor DarkGray
+    Write-Host ''
+    Write-Host '   [ 5 ] Last DISM/CBS Failure Details' -ForegroundColor Magenta
+    Write-Host '         Full-width recent servicing log view' -ForegroundColor DarkGray
     Write-Host ''
     Write-Host '   [ ESC ] Close / Cancel' -ForegroundColor Red
     Write-Host ''
@@ -381,6 +405,10 @@ while ($true) {
         }
         '^4$' {
             & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action Menu -SilentCaller
+            continue
+        }
+        '^5$' {
+            Show-DetailedServicingLogs
             continue
         }
         '^ESC$' {

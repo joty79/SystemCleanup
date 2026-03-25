@@ -91,14 +91,18 @@ echo.
 echo    %cBlue%[ 4 ]%cReset% Windows Update Manager
 echo          %cGray%Hide/unhide/list updates, reset cache, block Win11%cReset%
 echo.
+echo    %cMagenta%[ 5 ]%cReset% Last DISM/CBS Failure Details
+echo          %cGray%Full-width recent servicing log view%cReset%
+echo.
 echo    %cRed%[ ESC ]%cReset% Close / Cancel
 echo.
-<nul set /p "=  Enter choice (1/2/3/4/ESC): "
+<nul set /p "=  Enter choice (1/2/3/4/5/ESC): "
 for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action ReadMainMenuChoice -SilentCaller') do set "CHOICE=%%a"
 
 if /i "%CHOICE%"=="2" goto :InFlightOnly
 if /i "%CHOICE%"=="3" goto :LiveSoftwareDistribution
 if /i "%CHOICE%"=="4" goto :ManageUpdates
+if /i "%CHOICE%"=="5" goto :DismFailureDetails
 if /i "%CHOICE%"=="ESC" exit /b
 if /i "%CHOICE%"=="X" exit /b
 if "%CHOICE%" NEQ "1" (
@@ -212,6 +216,24 @@ echo %cCyan%==========================================%cReset%
 echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action Menu
 echo.
+goto :Menu
+
+REM ---------------------------------------------------------
+REM OPTION 5: Last DISM/CBS Failure Details
+REM ---------------------------------------------------------
+:DismFailureDetails
+cls
+echo.
+echo %cCyan%==========================================%cReset%
+echo    %cBold%  DISM / CBS FAILURE DETAILS%cReset%
+echo %cCyan%==========================================%cReset%
+echo.
+echo %cGray%DISM log: C:\Windows\Logs\DISM\dism.log%cReset%
+echo %cGray%CBS log:  C:\Windows\Logs\CBS\CBS.log%cReset%
+echo.
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DismFailureSummaryFull -SilentCaller
+echo.
+pause
 goto :Menu
 
 REM ---------------------------------------------------------
