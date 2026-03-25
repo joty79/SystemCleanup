@@ -10,6 +10,7 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Removed the flaky main-menu `Windows Update Cleanup (Disk Cleanup Utility)` GUI entry so the launcher no longer exposes the unreliable `cleanmgr /sagerun:88` path.
 - Moved `Windows Update Manager` up to main-menu option `[4]` after removing the `cleanmgr` GUI entry.
 - Updated the README to stop advertising the removed `Windows Update Cleanup` main-menu path and to reflect the new main-menu numbering.
+- Expanded `DISM` failure output so the launcher now prints the native exit code, points directly to `dism.log` / `CBS.log`, and gives a targeted hint for `Error 3 / 0x80070003` servicing-path failures.
 
 ## [2026-03-10]
 

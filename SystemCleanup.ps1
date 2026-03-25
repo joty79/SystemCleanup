@@ -157,6 +157,23 @@ function Reset-TrustedInstaller {
     & net.exe stop trustedinstaller *> $null
 }
 
+function Show-NativeFailureDetails {
+    param(
+        [string]$Title,
+        [int]$ExitCode
+    )
+
+    Write-Host ''
+    Write-Host ("  Exit code: {0}" -f $ExitCode) -ForegroundColor DarkYellow
+
+    if ($Title -match 'DISM') {
+        Write-Host '  DISM log: C:\Windows\Logs\DISM\dism.log' -ForegroundColor DarkGray
+        Write-Host '  CBS log:  C:\Windows\Logs\CBS\CBS.log' -ForegroundColor DarkGray
+        Write-Host '  Hint: Error 3 / 0x80070003 often means a missing servicing path under WinSxS\Temp\InFlight.' -ForegroundColor DarkYellow
+        Write-Host '  Hint: stripped/custom Windows images may fail RestoreHealth even when SFC is clean.' -ForegroundColor DarkYellow
+    }
+}
+
 function Invoke-NativeStep {
     param(
         [string]$Title,
@@ -181,6 +198,7 @@ function Invoke-NativeStep {
 
     Write-Host ''
     Write-Host '  [X]   FAILED: Found issues but could NOT fix them!' -ForegroundColor Red
+    Show-NativeFailureDetails -Title $Title -ExitCode $exitCode
     Write-Log -Level 'ERROR' -Message ("FAILED: {0} - Code: {1}" -f $Title, $exitCode)
     return $exitCode
 }
@@ -208,6 +226,7 @@ function Invoke-CmdNativeStep {
 
     Write-Host ''
     Write-Host '  [X]   FAILED: Found issues but could NOT fix them!' -ForegroundColor Red
+    Show-NativeFailureDetails -Title $Title -ExitCode $exitCode
     Write-Log -Level 'ERROR' -Message ("FAILED: {0} - Code: {1}" -f $Title, $exitCode)
     return $exitCode
 }

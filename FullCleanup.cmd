@@ -85,6 +85,14 @@ if "!STEPEXIT!"=="0" (
 ) else (
   echo.
   echo    %cRed%[X]   FAILED: Found issues but could NOT fix them!%cReset%
+  echo    %cYellow%Exit code: !STEPEXIT!%cReset%
+  echo !STEPTITLE! | find /i "DISM" >nul 2>&1
+  if not errorlevel 1 (
+    echo    %cGray%DISM log: C:\Windows\Logs\DISM\dism.log%cReset%
+    echo    %cGray%CBS log:  C:\Windows\Logs\CBS\CBS.log%cReset%
+    echo    %cYellow%Hint: Error 3 / 0x80070003 often means a missing servicing path under WinSxS\Temp\InFlight.%cReset%
+    echo    %cYellow%Hint: stripped/custom Windows images may fail RestoreHealth even when SFC is clean.%cReset%
+  )
   call :WriteLog "FAILED: !STEPTITLE! - Code: !STEPEXIT!"
 )
 exit /b !STEPEXIT!

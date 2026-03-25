@@ -325,3 +325,11 @@
 - Guardrail/rule: Do not expose `Windows Update Cleanup (Disk Cleanup Utility)` in the main `SystemCleanup` GUI. The launcher should present only four main options: `Full Cleanup`, `InFlight Cleanup Only`, `Live SoftwareDistribution Cleanup`, and `Windows Update Manager`. If the underlying `cleanmgr` implementation is kept for legacy/debug purposes, keep it non-primary and undocumented in the normal user flow.
 - Files affected: `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of main-menu numbering and README menu references.
+
+### Entry - 2026-03-25 (Show actionable DISM failure details)
+- Date: 2026-03-25
+- Problem: Generic `[X] FAILED` output was too vague when `DISM` failed on custom/VM images, forcing manual log hunting before the real servicing error became visible.
+- Root cause: The launcher only reported a pass/fail banner and logged the numeric code internally, without surfacing the `DISM`/`CBS` log locations or likely servicing-path hints in the console UI.
+- Guardrail/rule: When a `DISM` stage fails, print the native exit code in the console, point directly to `C:\Windows\Logs\DISM\dism.log` and `C:\Windows\Logs\CBS\CBS.log`, and include a short hint for `Error 3 / 0x80070003` servicing-path failures. Keep this behavior aligned across `SystemCleanup.ps1`, `SystemCleanup.cmd`, and `FullCleanup.cmd`.
+- Files affected: `SystemCleanup.ps1`, `SystemCleanup.cmd`, `FullCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1`; static review of CMD/PowerShell DISM failure messaging.
