@@ -434,6 +434,6 @@
 - Date: 2026-03-25
 - Problem: Entering several main-menu options could immediately launch work or jump into a submenu, which made the top-level menu feel risky to navigate casually.
 - Root cause: Confirmation UX had been added incrementally to a few actions only, leaving the main menu inconsistent.
-- Guardrail/rule: Treat the primary `SystemCleanup` main-menu actions as two-step entries. `[1]`, `[2]`, `[3]`, `[4]`, `[5]`, `[6]`, and `[7]` should first open a confirmation/opening panel that uses the same `Enter = start/open` and `ESC = back to main menu` blueprint. Do not start the action directly from a single top-level keypress.
+- Guardrail/rule: Treat the action-oriented `SystemCleanup` main-menu entries as two-step starts. `[1]`, `[2]`, `[3]`, `[4]`, and `[7]` should first open a confirmation panel that uses the same `Enter = start` and `ESC = back to main menu` blueprint. Do not force that extra step on submenu/info-only entries like `[5] Windows Update Manager` and `[6] Last DISM/CBS Failure Details`; those should open directly.
 - Files affected: `SystemCleanup.ps1`, `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and `ManageUpdates.ps1`; static review of all main-menu dispatch paths.

@@ -23,6 +23,7 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Cleared the main-menu screen before launching each main-menu action and highlighted the active self-update values (`Detected mode`, `Installer Mode`, `GitHub branch` / `Local source`) in bright green with clearer icons.
 - Applied the same Enter/ESC interaction blueprint to `Delivery Optimization Cleanup + Disable`, replacing the old `Proceed? (Y/N)` prompt and highlighting the active Delivery Optimization values in bright green.
 - Extended the safe Enter/ESC confirmation pattern across the main menu so `Full Cleanup`, `InFlight Cleanup`, `Live SoftwareDistribution Cleanup`, `Windows Update Manager`, and `Last DISM/CBS Failure Details` now open a confirmation panel before starting/opening.
+- Trimmed that confirmation pattern back for `[5] Windows Update Manager` and `[6] Last DISM/CBS Failure Details`, so submenu/info-only entries open directly again while the real cleanup/update actions remain two-step.
 
 ## [2026-03-10]
 

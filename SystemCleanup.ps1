@@ -432,22 +432,6 @@ function Show-DetailedServicingLogs {
     Write-Host '   DISM / CBS FAILURE DETAILS' -ForegroundColor White
     Write-Host '==========================================' -ForegroundColor Cyan
     Write-Host ''
-    Write-Host '  ⚠️  This will:' -ForegroundColor Yellow
-    Write-Host '      • Open the last wider DISM / CBS failure view' -ForegroundColor Gray
-    Write-Host '      • Show recent servicing clues without running cleanup actions' -ForegroundColor Gray
-    Write-Host ''
-    $confirm = Read-EnterOrEscChoice -EnterLabel 'Open DISM / CBS failure details' -EnterDescription 'Show the last wider servicing summary now'
-    if ($confirm -eq 'ESC') {
-        Write-Host '  Cancelled.' -ForegroundColor DarkGray
-        return $script:SkipReturnToMenuToken
-    }
-
-    Clear-Host
-    Write-Host ''
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host '   DISM / CBS FAILURE DETAILS' -ForegroundColor White
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host ''
     Write-Host '  DISM log: C:\Windows\Logs\DISM\dism.log' -ForegroundColor DarkGray
     Write-Host '  CBS log:  C:\Windows\Logs\CBS\CBS.log' -ForegroundColor DarkGray
     Write-Host ''
@@ -463,23 +447,6 @@ function Show-DetailedServicingLogs {
 }
 
 function Open-WindowsUpdateManager {
-    Clear-Host
-    Write-Host ''
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host '   WINDOWS UPDATE MANAGER' -ForegroundColor White
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host ''
-    Write-Host '  ⚠️  This will:' -ForegroundColor Yellow
-    Write-Host '      • Open the Windows Update Manager submenu' -ForegroundColor Gray
-    Write-Host '      • Let you list/hide/unhide updates, reset cache, and block Win11' -ForegroundColor Gray
-    Write-Host '      • Not start update changes until you choose a submenu action there' -ForegroundColor Gray
-    Write-Host ''
-    $confirm = Read-EnterOrEscChoice -EnterLabel 'Open Windows Update Manager' -EnterDescription 'Enter the update-management submenu now'
-    if ($confirm -eq 'ESC') {
-        Write-Host '  Cancelled.' -ForegroundColor DarkGray
-        return $script:SkipReturnToMenuToken
-    }
-
     Clear-Host
     & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action Menu -SilentCaller
 }

@@ -61,7 +61,7 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 
 Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. The main `Full Cleanup` flow now uses `dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase`, so superseded component versions are reclaimed immediately instead of waiting for the plain 30-day cleanup window. After any option completes, the tool **returns to the main menu** — only `ESC` exits the CMD launcher.
 
-The main-menu actions now open a confirmation panel first, so entering `[1]` / `[2]` / `[3]` / `[4]` / `[5]` / `[6]` / `[7]` does not immediately start work. The primary pattern is `Enter = start/open`, `ESC = back to main menu`.
+The action-oriented main-menu entries now open a confirmation panel first, so entering `[1]` / `[2]` / `[3]` / `[4]` / `[7]` does not immediately start work. `Windows Update Manager` `[5]` still opens directly because it is its own submenu, and `Last DISM/CBS Failure Details` `[6]` opens directly because it is read-only info. The primary action pattern is `Enter = start`, `ESC = back to main menu`.
 
 `/ResetBase` is intentionally more aggressive: after that step, older superseded component versions are no longer uninstallable.
 
