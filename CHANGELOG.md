@@ -12,6 +12,7 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Updated the README to stop advertising the removed `Windows Update Cleanup` main-menu path and to reflect the new main-menu numbering.
 - Expanded `DISM` failure output so the launcher now prints the native exit code, points directly to `dism.log` / `CBS.log`, and gives a targeted hint for `Error 3 / 0x80070003` servicing-path failures.
 - Added a short `DISM` / `CBS` log summary to `DISM` failure output so the launcher now surfaces the most relevant recent error lines automatically after a failed servicing step.
+- Refined the `CBS`/`DISM` log summary ranking so missing-path clues such as `InFlight`, `STATUS_OBJECT_PATH_NOT_FOUND`, and `RBDSTAMIL99` are prioritized ahead of low-signal finalize noise.
 
 ## [2026-03-10]
 

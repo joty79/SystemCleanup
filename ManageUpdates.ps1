@@ -43,6 +43,7 @@ function Get-RecentServicingLogLines {
         [string]$Path,
         [string]$Label,
         [string[]]$Patterns,
+        [string[]]$PriorityPatterns = @(),
         [int]$TailCount = 250,
         [int]$MaxLines = 4
     )
@@ -58,26 +59,56 @@ function Get-RecentServicingLogLines {
         return @("  [$Label] Unable to read log: $Path")
     }
 
-    $matchedLines = @(
-        foreach ($recentLine in $recentLines) {
-            foreach ($pattern in $Patterns) {
-                if ($recentLine -match $pattern) {
-                    $recentLine
-                    break
-                }
+    $matchedLines = @()
+    for ($lineIndex = 0; $lineIndex -lt $recentLines.Count; $lineIndex++) {
+        $recentLine = $recentLines[$lineIndex]
+        $isMatch = $false
+        foreach ($pattern in $Patterns) {
+            if ($recentLine -match $pattern) {
+                $isMatch = $true
+                break
             }
         }
-    )
+
+        if (-not $isMatch) {
+            continue
+        }
+
+        $score = 0
+        if ($recentLine -match 'Error') {
+            $score += 100
+        }
+        if ($recentLine -match 'HRESULT') {
+            $score += 25
+        }
+
+        for ($priorityIndex = 0; $priorityIndex -lt $PriorityPatterns.Count; $priorityIndex++) {
+            if ($recentLine -match $PriorityPatterns[$priorityIndex]) {
+                $score += 1000 - ($priorityIndex * 100)
+            }
+        }
+
+        $matchedLines += [pscustomobject]@{
+            Text = $recentLine
+            Index = $lineIndex
+            Score = $score
+        }
+    }
 
     if (@($matchedLines).Count -eq 0) {
         return @("  [$Label] No matching recent error lines found in the last $TailCount lines.")
     }
 
-    $matchedLines = @($matchedLines | Select-Object -Last $MaxLines)
+    $matchedLines = @(
+        $matchedLines |
+            Sort-Object @{ Expression = 'Score'; Descending = $true }, @{ Expression = 'Index'; Descending = $true } |
+            Select-Object -First $MaxLines |
+            Sort-Object Index
+    )
 
     return @(
         foreach ($matchedLine in $matchedLines) {
-            "  [$Label] $matchedLine"
+            "  [$Label] $($matchedLine.Text)"
         }
     )
 }
@@ -95,7 +126,13 @@ function Show-DismFailureSummary {
         '0x80070003',
         'path specified',
         'Failed'
-    )
+    ) -PriorityPatterns @(
+        'Failed processing package changes with session option CbsSessionOptionRepairStoreCorruption',
+        'Failed to restore the image health',
+        'HRESULT=80070003',
+        '0x80070003',
+        'path specified'
+    ) -TailCount 400
     $summaryLines += Get-RecentServicingLogLines -Path $cbsLogPath -Label 'CBS' -Patterns @(
         'Error',
         'ERROR_PATH_NOT_FOUND',
@@ -103,7 +140,13 @@ function Show-DismFailureSummary {
         'RBDSTAMIL99',
         'InFlight',
         'Failed'
-    )
+    ) -PriorityPatterns @(
+        'RBDSTAMIL99',
+        'WinSxS\\Temp\\InFlight',
+        'STATUS_OBJECT_PATH_NOT_FOUND',
+        'ERROR_PATH_NOT_FOUND',
+        'Error'
+    ) -TailCount 600
 
     $summaryLines | Write-Output
 }

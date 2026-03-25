@@ -341,3 +341,11 @@
 - Guardrail/rule: After a `DISM` stage fails, automatically print a short tail of recent relevant `DISM` and `CBS` log lines in the console. Keep the summary concise and aligned across `SystemCleanup.ps1`, `SystemCleanup.cmd`, and `FullCleanup.cmd` by using the shared `ManageUpdates.ps1` action.
 - Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `SystemCleanup.cmd`, `FullCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and `ManageUpdates.ps1`; static review of shared log-summary invocation.
+
+### Entry - 2026-03-25 (Prioritize real CBS missing-path clues over finalize noise)
+- Date: 2026-03-25
+- Problem: The first automatic `CBS` summaries could still surface low-signal finalize/cleanup lines instead of the actual root-cause clues such as missing `InFlight` paths or the failing filename.
+- Root cause: The summary picker selected the latest matching lines, not the highest-signal lines.
+- Guardrail/rule: Rank recent `DISM`/`CBS` matches so root-cause clues like `RBDSTAMIL99`, `WinSxS\Temp\InFlight`, `STATUS_OBJECT_PATH_NOT_FOUND`, and `ERROR_PATH_NOT_FOUND` appear before generic finalize noise. Keep the output short, but prefer specificity over recency.
+- Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; local invocation of `ManageUpdates.ps1 -Action DismFailureSummary`.
