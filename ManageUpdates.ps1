@@ -773,16 +773,29 @@ function Start-SystemCleanupLauncherRelaunch {
 
     $pwshCmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue
     $pwshExe = if ($null -ne $pwshCmd) { $pwshCmd.Source } else { Join-Path $PSHOME 'pwsh.exe' }
+    $launcherDir = Split-Path -Path $LauncherScriptPath -Parent
+    $helperPath = Join-Path $env:TEMP ("SystemCleanup_relaunch_{0}.cmd" -f [guid]::NewGuid().ToString('N'))
+    $helperContent = @(
+        '@echo off',
+        'setlocal',
+        'timeout /t 2 /nobreak >nul',
+        'set "WT_SESSION="',
+        ('start "" "{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}"' -f $pwshExe, $LauncherScriptPath),
+        'del "%~f0"'
+    )
 
     try {
-        Start-Process -FilePath $pwshExe -ArgumentList @(
-            '-NoProfile',
-            '-ExecutionPolicy', 'Bypass',
-            '-File', $LauncherScriptPath
-        ) -WorkingDirectory (Split-Path -Path $LauncherScriptPath -Parent) | Out-Null
+        Set-Content -LiteralPath $helperPath -Value $helperContent -Encoding ASCII -ErrorAction Stop
+        Start-Process -FilePath $helperPath -WorkingDirectory $launcherDir -WindowStyle Hidden | Out-Null
         return $true
     }
     catch {
+        try {
+            if (Test-Path -LiteralPath $helperPath) {
+                Remove-Item -LiteralPath $helperPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+        catch {}
         return $false
     }
 }

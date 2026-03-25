@@ -27,6 +27,7 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Fixed the launcher-side `DISM / CBS` detail panels to explicitly render the returned summary lines instead of relying on implicit nested-script output, so menu `[6]` consistently shows the full servicing summary again.
 - Tightened the servicing-summary selector so menu `[6]` ignores common noisy `DISM` `EnumeratePathEx / FindFirstFile failed` setup probes and scans deeper into `CBS.log`, making root-cause clues more likely to appear than generic source-noise lines.
 - Changed app-driven installed self-updates to skip the old Explorer-folder reopen path and, after a successful installed update, ask whether to relaunch only the app (`Enter`) or relaunch the app plus restart Explorer without reopening a folder window.
+- Adjusted installed self-update relaunch to use the same context-menu style launch path through a detached helper that clears `WT_SESSION`, so the updated app can reopen correctly in Windows Terminal instead of inheriting the old WT child environment.
 
 ## [2026-03-10]
 
