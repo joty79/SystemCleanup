@@ -10,6 +10,8 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $script:LogDir = ''
 $script:LogFile = ''
+$script:CachedLiveDownloadCacheLine = $null
+$script:CachedDeliveryOptimizationLine = $null
 $script:PwshExe = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) {
     (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
 }
@@ -371,8 +373,15 @@ function Show-DetailedServicingLogs {
 
 function Show-MainMenu {
     Clear-Host
-    $liveDownloadCacheLine = Get-LiveDownloadCacheStatusLine
-    $deliveryOptimizationLine = Get-DeliveryOptimizationStatusLine
+    if ($null -eq $script:CachedLiveDownloadCacheLine) {
+        $script:CachedLiveDownloadCacheLine = Get-LiveDownloadCacheStatusLine
+    }
+    if ($null -eq $script:CachedDeliveryOptimizationLine) {
+        $script:CachedDeliveryOptimizationLine = Get-DeliveryOptimizationStatusLine
+    }
+
+    $liveDownloadCacheLine = $script:CachedLiveDownloadCacheLine
+    $deliveryOptimizationLine = $script:CachedDeliveryOptimizationLine
     $toolSelfUpdateLine = Get-ToolSelfUpdateStatusLine
 
     Write-Host ''
@@ -428,11 +437,13 @@ while ($true) {
         }
         '^3$' {
             & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action LiveCleanup -SilentCaller
+            $script:CachedLiveDownloadCacheLine = Get-LiveDownloadCacheStatusLine
             Wait-ReturnToMenu
             continue
         }
         '^4$' {
             & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DeliveryOptimizationCleanup -SilentCaller
+            $script:CachedDeliveryOptimizationLine = Get-DeliveryOptimizationStatusLine
             Wait-ReturnToMenu
             continue
         }

@@ -73,8 +73,18 @@ cls
 set "LiveDownloadCacheLine=Clean live Download cache files"
 set "DeliveryOptimizationLine=Delivery Optimization status unavailable"
 set "ToolSelfUpdateLine=InstallerCore updater unavailable"
-for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action LiveCleanupStatus -SilentCaller') do set "LiveDownloadCacheLine=%%a"
-for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DeliveryOptimizationStatus -SilentCaller') do set "DeliveryOptimizationLine=%%a"
+if defined LiveDownloadCacheLineCached (
+    set "LiveDownloadCacheLine=!LiveDownloadCacheLineCached!"
+) else (
+    for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action LiveCleanupStatus -SilentCaller') do set "LiveDownloadCacheLine=%%a"
+    set "LiveDownloadCacheLineCached=!LiveDownloadCacheLine!"
+)
+if defined DeliveryOptimizationLineCached (
+    set "DeliveryOptimizationLine=!DeliveryOptimizationLineCached!"
+) else (
+    for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DeliveryOptimizationStatus -SilentCaller') do set "DeliveryOptimizationLine=%%a"
+    set "DeliveryOptimizationLineCached=!DeliveryOptimizationLine!"
+)
 for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action ToolSelfUpdateStatus -SilentCaller') do set "ToolSelfUpdateLine=%%a"
 echo.
 echo %cCyan%==========================================%cReset%
@@ -213,6 +223,8 @@ echo    %cBold%  LIVE SOFTWAREDISTRIBUTION CLEANUP%cReset%
 echo %cCyan%==========================================%cReset%
 echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action LiveCleanup
+for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action LiveCleanupStatus -SilentCaller') do set "LiveDownloadCacheLine=%%a"
+set "LiveDownloadCacheLineCached=!LiveDownloadCacheLine!"
 echo.
 goto :Menu
 
@@ -259,6 +271,8 @@ echo    %cBold%  DELIVERY OPTIMIZATION CLEANUP + DISABLE%cReset%
 echo %cCyan%==========================================%cReset%
 echo.
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DeliveryOptimizationCleanup
+for /f "delims=" %%a in ('%PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DeliveryOptimizationStatus -SilentCaller') do set "DeliveryOptimizationLine=%%a"
+set "DeliveryOptimizationLineCached=!DeliveryOptimizationLine!"
 echo.
 goto :Menu
 

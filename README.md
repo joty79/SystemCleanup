@@ -301,7 +301,9 @@ Selection: 'KB5034441'  ← hide by KB number
 - If the launcher is running from a portable folder, it falls back to `DownloadLatest`
 - The gray description line shows the detected updater defaults directly in the main menu, for example `Repo copy • GitHub/wt`, `Installed copy • GitHub/master`, or `Installed copy • Local`
 - The self-update screen shows the default `Installer Mode` plus either `GitHub branch` or `Local source`
-- Press `Enter` to continue with those defaults, `E` to open the normal `Install.ps1` interactive menu for Local/GitHub/branch/source selection, or `ESC` to cancel
+- The choice block is split into clear per-line actions: `Enter` uses shown defaults, `E` opens the normal `Install.ps1` interactive menu, and `ESC` cancels
+- For installed copies, a successful InstallerCore `Install` / `Update` run saves the chosen `package_source` and `github_ref` into `state\install-meta.json`, so the next launcher run reuses those defaults
+- For repo copies, the default GitHub branch follows the branch currently checked out in `.git`
 
 This keeps updater logic aligned with `InstallerCore`, avoids duplicating the source/branch chooser inside the launcher, and makes the pattern a good blueprint for other PowerShell main-menu tools that already ship a sibling `Install.ps1`.
 

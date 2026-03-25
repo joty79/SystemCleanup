@@ -668,14 +668,14 @@ function Get-InstallerCoreUpdateStatusLine {
 }
 
 function Read-InstallerCoreUpdateChoice {
-    Write-Host '  Press ' -ForegroundColor Gray -NoNewline
-    Write-Host 'Enter' -ForegroundColor White -NoNewline
-    Write-Host ' to continue with defaults, ' -ForegroundColor Gray -NoNewline
-    Write-Host 'E' -ForegroundColor White -NoNewline
-    Write-Host ' to choose other options, or ' -ForegroundColor Gray -NoNewline
-    Write-Host 'ESC' -ForegroundColor White -NoNewline
-    Write-Host ' to cancel.' -ForegroundColor Gray
-    Write-Host '  Choice: ' -ForegroundColor Gray -NoNewline
+    Write-Host '  Choices:' -ForegroundColor White
+    Write-Host '  ✅ [Enter] Use shown defaults' -ForegroundColor Green
+    Write-Host '           Continue with the Installer Mode + branch/source shown above' -ForegroundColor DarkGray
+    Write-Host '  ⚙️  [E]     Open full InstallerCore menu' -ForegroundColor Yellow
+    Write-Host '           Choose Local/GitHub and branch/source manually' -ForegroundColor DarkGray
+    Write-Host '  ❌ [ESC]   Cancel' -ForegroundColor Red
+    Write-Host ''
+    Write-Host '  Choice: ' -ForegroundColor White -NoNewline
 
     while ($true) {
         $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
@@ -738,13 +738,18 @@ function Invoke-InstallerCoreToolUpdate {
         if ($state.RelaunchesInstaller) {
             Write-Host "      • InstallerCore may relaunch the updated installer after download" -ForegroundColor Gray
         }
+        if ($state.Mode -eq 'Repo copy') {
+            Write-Host "      • Repo-copy defaults follow the currently checked-out git branch" -ForegroundColor Gray
+        }
     }
     elseif ($state.InstallerMode -eq 'Local') {
         Write-Host "      • Installed copy under %LOCALAPPDATA% will be updated from the recorded local source" -ForegroundColor Gray
+        Write-Host "      • A successful update will save that Local/GitHub choice for next time" -ForegroundColor Gray
         Write-Host "      • Use E if you want the full InstallerCore menu for GitHub/source switching" -ForegroundColor Gray
     }
     else {
         Write-Host "      • Installed copy under %LOCALAPPDATA% will be updated from GitHub" -ForegroundColor Gray
+        Write-Host "      • A successful update will save the chosen GitHub branch for next time" -ForegroundColor Gray
         Write-Host "      • Registry/verification paths stay under the normal InstallerCore update flow" -ForegroundColor Gray
     }
     Write-Host ""

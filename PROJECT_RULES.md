@@ -389,3 +389,19 @@
 - Guardrail/rule: For launcher-level self-update, present defaults using user-facing InstallerCore labels such as `Installer Mode`, `GitHub branch`, and `Local source`. Keep `Enter = use displayed defaults`, `E = open the standard sibling Install.ps1 interactive menu`, and `ESC = cancel`. Do not duplicate Local/GitHub/branch chooser logic inside the launcher when InstallerCore already owns that UI.
 - Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; local non-admin status probe via `ManageUpdates.ps1 -Action ToolSelfUpdateStatus`; static review of Enter/E/ESC flow.
+
+### Entry - 2026-03-25 (Self-update prompt should explain persistence and keep choices scannable)
+- Date: 2026-03-25
+- Problem: Even after switching to `Installer Mode` / `GitHub branch`, the self-update choice line was still dense, and it was unclear whether a changed GitHub branch or Local/GitHub selection would persist to the next run.
+- Root cause: The launcher compressed all choices into one sentence and did not surface the difference between installed-copy saved defaults and repo-copy branch detection.
+- Guardrail/rule: Keep the self-update choice prompt split into separate colored lines for `Enter`, `E`, and `ESC`. Also explain persistence directly in the self-update panel: installed-copy InstallerCore updates save `package_source` / `github_ref` to `state\install-meta.json`, while repo-copy defaults follow the current checked-out git branch instead of storing separate launcher state.
+- Files affected: `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1`; static review against `Install.ps1` `SaveMeta` / `PreparePackageSource` flow.
+
+### Entry - 2026-03-25 (Cache expensive main-menu status probes once per launcher session)
+- Date: 2026-03-25
+- Problem: The main menu developed a visible delay because the live status text for `Live SoftwareDistribution Cleanup` and `Delivery Optimization Cleanup + Disable` was recomputed on every menu render.
+- Root cause: Both launchers re-ran the expensive PowerShell status probes each time the main menu repainted; Delivery Optimization status in particular can take noticeably longer than a normal menu draw.
+- Guardrail/rule: Cache the `[3]` and `[4]` main-menu status lines after the first successful probe in each launcher session. Refresh only after the corresponding action actually runs, not on every return to the menu. Keep self-update status live if needed; the once-per-session cache rule applies specifically to the expensive folder/cache status probes.
+- Files affected: `SystemCleanup.ps1`, `SystemCleanup.cmd`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: Static review of launcher menu flow; local timing probe for `ManageUpdates.ps1 -Action LiveCleanupStatus` and `DeliveryOptimizationStatus`; PowerShell parser validation on `SystemCleanup.ps1`.

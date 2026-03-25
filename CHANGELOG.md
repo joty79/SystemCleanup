@@ -17,6 +17,8 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Added a launcher-level self-update option `[7] Update This Tool (InstallerCore)` that reuses the sibling `Install.ps1` and auto-detects whether to run `DownloadLatest` or `UpdateGitHub`.
 - Added a live updater status probe so the main menu shows the detected InstallerCore update mode directly in the gray description line.
 - Refined the self-update screen to show user-facing InstallerCore defaults as `Installer Mode` / `GitHub branch` or `Local source`, with `Enter` using those defaults and `E` opening the standard `Install.ps1` menu for alternate Local/GitHub/branch choices.
+- Reformatted the self-update choice prompt into clearer per-line colored actions and added an explicit note about when source/branch selections are persisted for the next run.
+- Reduced main-menu delay by caching the expensive live status lines for `Live SoftwareDistribution Cleanup` and `Delivery Optimization Cleanup + Disable` after the first menu render, then refreshing only after those actions actually run.
 
 ## [2026-03-10]
 
