@@ -44,6 +44,7 @@ $script:ProfileJson = @'
     "Install.ps1",
     "app-metadata.json",
     "SystemCleanup.ps1",
+    "Launch-SystemCleanup.vbs",
     "FullCleanup.cmd",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
@@ -54,6 +55,7 @@ $script:ProfileJson = @'
     "Install.ps1",
     "app-metadata.json",
     "SystemCleanup.ps1",
+    "Launch-SystemCleanup.vbs",
     "FullCleanup.cmd",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
@@ -65,6 +67,7 @@ $script:ProfileJson = @'
     "Install.ps1",
     "app-metadata.json",
     "SystemCleanup.ps1",
+    "Launch-SystemCleanup.vbs",
     "FullCleanup.cmd",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
@@ -104,7 +107,7 @@ $script:ProfileJson = @'
       "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "type": "REG_SZ",
-      "value": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File \"{InstallRoot}\\SystemCleanup.ps1\""
+      "value": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
     },
     {
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
@@ -122,7 +125,7 @@ $script:ProfileJson = @'
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "type": "REG_SZ",
-      "value": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File \"{InstallRoot}\\SystemCleanup.ps1\""
+      "value": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
     }
   ],
   "registry_verify": [
@@ -134,7 +137,7 @@ $script:ProfileJson = @'
     {
       "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup\\Command",
       "name": "(default)",
-      "expected": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File \"{InstallRoot}\\SystemCleanup.ps1\""
+      "expected": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
     },
     {
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
@@ -144,10 +147,16 @@ $script:ProfileJson = @'
     {
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup\\Command",
       "name": "(default)",
-      "expected": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File \"{InstallRoot}\\SystemCleanup.ps1\""
+      "expected": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
     }
   ],
-  "wrapper_patches": []
+  "wrapper_patches": [
+    {
+      "file": "Launch-SystemCleanup.vbs",
+      "regex": "(?i)d:\\\\users\\\\joty79\\\\scripts\\\\systemcleanup\\\\SystemCleanup\\.ps1",
+      "replacement": "{InstallRoot}\\SystemCleanup.ps1"
+    }
+  ]
 }
 '@
 $script:Profile = $script:ProfileJson | ConvertFrom-Json -Depth 50

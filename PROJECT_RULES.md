@@ -255,6 +255,14 @@
 - Guardrail/rule: `SystemCleanup` should use `app-metadata.json` as the canonical source for app name/version/repo, keep `SystemCleanup.ps1` as the primary launcher/UI entrypoint, and treat `Install.ps1` as generated output from the current `InstallerCore` profile/template rather than a bespoke downstream script.
 - Files affected: `app-metadata.json`, `SystemCleanup.ps1`, `Install.ps1`, `.gitignore`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and regenerated `Install.ps1`; static review of updated `InstallerCore` profile and repo-local metadata contract.
+
+### Entry - 2026-04-16 (Context-menu launch should use hidden VBS handoff)
+- Date: 2026-04-16
+- Problem: Launching `SystemCleanup` from Explorer showed a visible intermediate `pwsh` window before the app handed off into Windows Terminal.
+- Root cause: The context-menu command invoked `pwsh.exe -File SystemCleanup.ps1` directly, so the initial elevated PowerShell host became visible before `SystemCleanup.ps1` could rehost itself.
+- Guardrail/rule: For Explorer/context-menu launch, `SystemCleanup` should use a hidden `.vbs` wrapper that ShellExecutes the real elevated host (`wt.exe` when available, otherwise `pwsh.exe`) instead of calling `pwsh.exe` directly from the registry command.
+- Files affected: `Launch-SystemCleanup.vbs`, `SystemCleanup.reg`, `Install.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on regenerated `Install.ps1`; static review of `.vbs` launcher handoff and updated registry command contract.
 - Problem: Simply invoking `cmd.exe /c ...` from inside the PowerShell-hosted WT menu was not enough; option `[1]` still behaved like an inline PowerShell run and did not give the intended separate native-servicing view.
 - Root cause: The previous experiment changed the process used for native commands, but not the actual pane host or pane lifecycle.
 - Guardrail/rule: On the `wt` branch, when `WT_SESSION` is present, main-menu option `[1] Full Cleanup` should open a dedicated Windows Terminal split pane and run `FullCleanup.cmd` there. Keep the menu pane separate, and keep `FullCleanup.cmd` installer-tracked so installed copies can use the same split-pane flow.
