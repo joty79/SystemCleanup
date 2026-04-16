@@ -7,6 +7,8 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 ### Changed
 
 - Migrated the primary launcher to the newer PowerShell UI pattern with a versioned header, WT-safe rendering, arrow-key main-menu navigation, and number shortcuts.
+- Fixed the main-menu `ESC`/`Close / Cancel` path so it now exits the launcher host cleanly instead of just breaking the inner menu switch.
+- Extended the new versioned header style into submenu screens such as `Full Cleanup`, `InFlight Cleanup`, `DISM/CBS Failure Details`, and `Windows Update Manager`, so the app no longer drops back to the older pre-template visual language after leaving the main menu.
 - Added canonical `app-metadata.json` so the app version and GitHub repo now come from a single shared metadata file instead of being hardcoded only inside scripts.
 - Regenerated `Install.ps1` from the current `InstallerCore` template/profile so the installer now matches the modern SystemCleanup runtime contract again.
 - Synced the `InstallerCore` SystemCleanup profile to the current launcher reality: `SystemCleanup.ps1` is the primary entrypoint, and `app-metadata.json`, `FullCleanup.cmd`, and `ManageUpdates.ps1` are now part of the generated installer contract.

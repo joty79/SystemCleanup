@@ -513,6 +513,34 @@ function Write-Section {
     Write-Host "$($script:C.H1)$prefix$($script:C.Dim)$line$($script:C.Reset)"
 }
 
+function Show-SubmenuHeader {
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [AllowEmptyString()][string]$Subtitle = ''
+    )
+
+    try {
+        Clear-Host
+    }
+    catch {
+    }
+
+    Write-Banner
+    Write-Section $Title
+    if (-not [string]::IsNullOrWhiteSpace($Subtitle)) {
+        Write-Host "  $($script:C.Dim)$Subtitle$($script:C.Reset)"
+    }
+    Write-Host ''
+}
+
+function Request-LauncherExit {
+    try {
+        $Host.SetShouldExit(0)
+    }
+    catch {
+    }
+}
+
 function Get-NormalizedConsoleKeyName {
     param(
         [AllowEmptyString()]
@@ -1049,12 +1077,7 @@ function Start-FullCleanupInWtPane {
 }
 
 function Invoke-FullCleanup {
-    Clear-Host
-    Write-Host ''
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host '   FULL SYSTEM CLEANUP' -ForegroundColor White
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host ''
+    Show-SubmenuHeader -Title 'Full Cleanup' -Subtitle 'SFC + DISM + InFlight'
     Write-Host '  ⚠️  This will:' -ForegroundColor Yellow
     Write-Host '      • Run the full SFC + DISM + WinSxS Temp sequence' -ForegroundColor Gray
     Write-Host '      • Use the aggressive DISM /StartComponentCleanup /ResetBase path' -ForegroundColor Gray
@@ -1082,12 +1105,7 @@ function Invoke-FullCleanup {
         return
     }
 
-    Clear-Host
-    Write-Host ''
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host '   FULL SYSTEM CLEANUP' -ForegroundColor White
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host ''
+    Show-SubmenuHeader -Title 'Full Cleanup' -Subtitle 'Running servicing and cleanup flow'
     if ([string]::IsNullOrWhiteSpace($script:LogFile)) {
         Write-Host 'Logs disabled: no writable log directory was available.' -ForegroundColor DarkYellow
     }
@@ -1122,12 +1140,7 @@ function Invoke-FullCleanup {
 }
 
 function Invoke-InFlightOnly {
-    Clear-Host
-    Write-Host ''
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host '   INFLIGHT CLEANUP (MoveFileEx/Registry)' -ForegroundColor White
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host ''
+    Show-SubmenuHeader -Title 'InFlight Cleanup Only' -Subtitle 'MoveFileEx + reboot-time deletion fallback'
     Write-Host '  ⚠️  This will:' -ForegroundColor Yellow
     Write-Host '      • Run the standalone WinSxS Temp / InFlight cleanup path' -ForegroundColor Gray
     Write-Host '      • Delete what it can now and schedule locked leftovers for reboot-time removal' -ForegroundColor Gray
@@ -1144,12 +1157,7 @@ function Invoke-InFlightOnly {
 }
 
 function Show-DetailedServicingLogs {
-    Clear-Host
-    Write-Host ''
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host '   DISM / CBS FAILURE DETAILS' -ForegroundColor White
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host ''
+    Show-SubmenuHeader -Title 'DISM / CBS Failure Details' -Subtitle 'Recent servicing diagnostics'
     Write-Host '  DISM log: C:\Windows\Logs\DISM\dism.log' -ForegroundColor DarkGray
     Write-Host '  CBS log:  C:\Windows\Logs\CBS\CBS.log' -ForegroundColor DarkGray
     Write-Host ''
@@ -1232,7 +1240,8 @@ while ($true) {
             Clear-Host
             $toolSelfUpdateResult = & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action ToolSelfUpdate -SilentCaller
             if ($toolSelfUpdateResult -eq $script:RelaunchAndExitToken) {
-                break
+                Request-LauncherExit
+                return
             }
             if ($toolSelfUpdateResult -ne $script:SkipReturnToMenuToken) {
                 [void](Resolve-AppUpdateStatus -ForceRefresh)
@@ -1241,7 +1250,8 @@ while ($true) {
             continue
         }
         '^ESC$' {
-            break
+            Request-LauncherExit
+            return
         }
         default {
             Write-Host '  Invalid choice.' -ForegroundColor Red

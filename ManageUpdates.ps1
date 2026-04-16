@@ -10,9 +10,101 @@ param(
 
 $script:SkipReturnToMenuToken = '__SYSTEMCLEANUP_SKIP_RETURN_TO_MENU__'
 $script:RelaunchAndExitToken = '__SYSTEMCLEANUP_RELAUNCH_AND_EXIT__'
+$script:AppName = 'SystemCleanup'
+$script:AppVersion = '1.0.0'
+$script:AppMetadataPath = Join-Path $PSScriptRoot 'app-metadata.json'
+$script:AppUpdateStatusCachePath = Join-Path $PSScriptRoot 'state\app-update-status.json'
+$script:E = [char]27
+$script:Ui = @{
+    H1      = "$($script:E)[38;2;90;180;240m"
+    Dim     = "$($script:E)[38;2;100;110;120m"
+    White   = "$($script:E)[38;2;220;225;230m"
+    OK      = "$($script:E)[38;2;46;204;113m"
+    Warn    = "$($script:E)[38;2;241;196;15m"
+    Fail    = "$($script:E)[38;2;231;76;60m"
+    Bold    = "$($script:E)[1m"
+    Reset   = "$($script:E)[0m"
+}
 
 # 🔸 Force UTF-8 Encoding
 $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+Initialize-SystemCleanupMetadata
+
+function Initialize-SystemCleanupMetadata {
+    if (-not (Test-Path -LiteralPath $script:AppMetadataPath -PathType Leaf)) {
+        return
+    }
+
+    try {
+        $metadata = Get-Content -LiteralPath $script:AppMetadataPath -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ($metadata.PSObject.Properties['app_name'] -and -not [string]::IsNullOrWhiteSpace([string]$metadata.app_name)) {
+            $script:AppName = [string]$metadata.app_name
+        }
+        if ($metadata.PSObject.Properties['version'] -and -not [string]::IsNullOrWhiteSpace([string]$metadata.version)) {
+            $script:AppVersion = [string]$metadata.version
+        }
+    }
+    catch {
+    }
+}
+
+function Get-SystemCleanupUpdateLabel {
+    if (-not (Test-Path -LiteralPath $script:AppUpdateStatusCachePath -PathType Leaf)) {
+        return [pscustomobject]@{ Label = 'Status unavailable'; Color = $script:Ui.Dim }
+    }
+
+    try {
+        $cache = Get-Content -LiteralPath $script:AppUpdateStatusCachePath -Raw -ErrorAction Stop | ConvertFrom-Json
+        switch ([string]$cache.Status) {
+            'UpToDate' { return [pscustomobject]@{ Label = 'Up to date'; Color = $script:Ui.OK } }
+            'UpdateAvailable' { return [pscustomobject]@{ Label = 'Update available'; Color = $script:Ui.Warn } }
+            'LocalAhead' { return [pscustomobject]@{ Label = 'Local version ahead'; Color = $script:Ui.Warn } }
+            'Error' { return [pscustomobject]@{ Label = 'Update check failed'; Color = $script:Ui.Fail } }
+            default { return [pscustomobject]@{ Label = 'Status unavailable'; Color = $script:Ui.Dim } }
+        }
+    }
+    catch {
+        return [pscustomobject]@{ Label = 'Status unavailable'; Color = $script:Ui.Dim }
+    }
+}
+
+function Show-SystemCleanupHeader {
+    param(
+        [Parameter(Mandatory)][string]$SectionTitle,
+        [AllowEmptyString()][string]$SectionSubtitle = ''
+    )
+
+    Clear-Host
+    $width = 100
+    try {
+        $width = [Math]::Min(100, $Host.UI.RawUI.WindowSize.Width - 2)
+    }
+    catch {
+    }
+
+    $border = [string]::new([char]0x2550, ($width - 2))
+    $titleText = " $($script:AppName) v$($script:AppVersion)"
+    $subtitleText = ' Repair + Update + Cache Cleanup'
+    $updateStatus = Get-SystemCleanupUpdateLabel
+    $updateText = " Update: $($updateStatus.Label)"
+    $titlePad = [Math]::Max(0, $width - 2 - $titleText.Length)
+    $subtitlePad = [Math]::Max(0, $width - 2 - $subtitleText.Length)
+    $updatePad = [Math]::Max(0, $width - 2 - $updateText.Length)
+
+    Write-Host ''
+    Write-Host "$($script:Ui.H1)$([char]0x2554)$border$([char]0x2557)$($script:Ui.Reset)"
+    Write-Host "$($script:Ui.H1)$([char]0x2551)$($script:Ui.Bold)$($script:Ui.White)$titleText$($script:Ui.Reset)$(' ' * $titlePad)$($script:Ui.H1)$([char]0x2551)$($script:Ui.Reset)"
+    Write-Host "$($script:Ui.H1)$([char]0x2551)$($script:Ui.Dim)$subtitleText$($script:Ui.Reset)$(' ' * $subtitlePad)$($script:Ui.H1)$([char]0x2551)$($script:Ui.Reset)"
+    Write-Host "$($script:Ui.H1)$([char]0x2551)$($updateStatus.Color)$updateText$($script:Ui.Reset)$(' ' * $updatePad)$($script:Ui.H1)$([char]0x2551)$($script:Ui.Reset)"
+    Write-Host "$($script:Ui.H1)$([char]0x255A)$border$([char]0x255D)$($script:Ui.Reset)"
+    Write-Host ''
+    Write-Host "  $($script:Ui.H1)$([char]0x25C6) $SectionTitle $($script:Ui.Dim)$([string]::new([char]0x2500, [Math]::Max(0, $width - $SectionTitle.Length - 6)))$($script:Ui.Reset)"
+    if (-not [string]::IsNullOrWhiteSpace($SectionSubtitle)) {
+        Write-Host "  $($script:Ui.Dim)$SectionSubtitle$($script:Ui.Reset)"
+    }
+    Write-Host ''
+}
 
 # ─────────────────────────────────────────────
 # 🔵 HELPER: Read single key press (for menu)
@@ -960,9 +1052,7 @@ function Restart-ExplorerShellNoReopen {
 function Invoke-InstallerCoreToolUpdate {
     $state = Get-InstallerCoreUpdateState
 
-    Clear-Host
-    Write-Host "`n  🔵 TOOL SELF-UPDATE (INSTALLERCORE)" -ForegroundColor Cyan
-    Write-Host "  $('─' * 38)" -ForegroundColor DarkGray
+    Show-SystemCleanupHeader -SectionTitle 'Tool Self-Update' -SectionSubtitle 'InstallerCore'
 
     if (-not $state.IsAvailable) {
         Write-Host "  ❌ $($state.StatusLine)" -ForegroundColor Red
@@ -1142,9 +1232,7 @@ function Refresh-DeliveryOptimizationService {
 function Invoke-DeliveryOptimizationCleanupAndDisable {
     $before = Get-DeliveryOptimizationState
 
-    Clear-Host
-    Write-Host "`n  🔵 DELIVERY OPTIMIZATION CLEANUP + DISABLE" -ForegroundColor Cyan
-    Write-Host "  $('─' * 44)" -ForegroundColor DarkGray
+    Show-SystemCleanupHeader -SectionTitle 'Delivery Optimization Cleanup + Disable' -SectionSubtitle 'Clear cache and force CDN-only mode'
     Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
     Write-Host "      • Clear Delivery Optimization cache with Delete-DeliveryOptimizationCache" -ForegroundColor Gray
     Write-Host "      • Force DownloadMode = 0 (CdnOnly) to disable peer-to-peer sharing safely" -ForegroundColor Gray
@@ -2041,9 +2129,7 @@ function Schedule-PathsForDeletionOnReboot {
 function Remove-LiveSoftwareDistributionDownload {
     $downloadPath = 'C:\Windows\SoftwareDistribution\Download'
 
-    Clear-Host
-    Write-Host "`n  🔵 LIVE SOFTWAREDISTRIBUTION CLEANUP" -ForegroundColor Cyan
-    Write-Host "  $('─' * 40)" -ForegroundColor DarkGray
+    Show-SystemCleanupHeader -SectionTitle 'Live SoftwareDistribution Cleanup' -SectionSubtitle 'Clean the live Download cache safely'
     Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
     Write-Host "      • Stop update services temporarily" -ForegroundColor Gray
     Write-Host "      • Clean the live SoftwareDistribution\\Download cache" -ForegroundColor Gray
@@ -2664,7 +2750,7 @@ if ($directActionCompleted) {
 
 $menuLoop = $true
 while ($menuLoop) {
-    Clear-Host
+    Show-SystemCleanupHeader -SectionTitle 'Windows Update Manager' -SectionSubtitle 'Hide updates, reset cache, and block Windows 11'
     $win11State = Get-Win11BlockState
     $win11Status = switch ($win11State.StatusLabel) {
         'Policy active' { '🟢 Policy active' }
