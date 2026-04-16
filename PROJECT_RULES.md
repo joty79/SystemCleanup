@@ -248,6 +248,13 @@
 
 ### Entry - 2026-03-12 (wt branch: run Full Cleanup in a dedicated WT cmd pane)
 - Date: 2026-03-12
+### Entry - 2026-04-16 (Promote SystemCleanup to current UI + installer contract)
+- Date: 2026-04-16
+- Problem: `SystemCleanup` had fallen behind the newer PowerShell UI and InstallerCore contract used by newer tools, so the repo still relied on an older launcher presentation, no canonical app metadata file, and a profile drift between `InstallerCore` and the downstream generated installer.
+- Root cause: Most recent UI/template improvements landed first in `WinAppManager` and `InstallerCore`, but this older repo was never migrated forward to those shared patterns.
+- Guardrail/rule: `SystemCleanup` should use `app-metadata.json` as the canonical source for app name/version/repo, keep `SystemCleanup.ps1` as the primary launcher/UI entrypoint, and treat `Install.ps1` as generated output from the current `InstallerCore` profile/template rather than a bespoke downstream script.
+- Files affected: `app-metadata.json`, `SystemCleanup.ps1`, `Install.ps1`, `.gitignore`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and regenerated `Install.ps1`; static review of updated `InstallerCore` profile and repo-local metadata contract.
 - Problem: Simply invoking `cmd.exe /c ...` from inside the PowerShell-hosted WT menu was not enough; option `[1]` still behaved like an inline PowerShell run and did not give the intended separate native-servicing view.
 - Root cause: The previous experiment changed the process used for native commands, but not the actual pane host or pane lifecycle.
 - Guardrail/rule: On the `wt` branch, when `WT_SESSION` is present, main-menu option `[1] Full Cleanup` should open a dedicated Windows Terminal split pane and run `FullCleanup.cmd` there. Keep the menu pane separate, and keep `FullCleanup.cmd` installer-tracked so installed copies can use the same split-pane flow.
@@ -366,7 +373,6 @@
 - Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and `ManageUpdates.ps1`; static review of main-menu numbering and shared action wiring.
 
-<<<<<<< HEAD
 ### Entry - 2026-03-25 (Safe Delivery Optimization cleanup + disable path)
 - Date: 2026-03-25
 - Problem: Users wanted a visible main-menu way to see whether Delivery Optimization peer sharing is off, see the current cache size, and reclaim Delivery Optimization cache space without manually hunting through Settings or raw folders.
@@ -462,12 +468,3 @@
 - Guardrail/rule: For self-update started from an installed `SystemCleanup` session, call `Install.ps1` with `-NoExplorerRestart`, then ask the user how to come back up after a successful installed update: `Enter = relaunch app only`, any other key = `restart Explorer + relaunch app`. The Explorer-refresh path must not reopen a folder window and must avoid `Start-Process explorer.exe`; rely on the shell auto-restart path instead to reduce ghost/zombie Explorer instances. For WT-capable relaunch, do not target the existing WT window with `-w 0`, because that can create a second tab beside the old app. Use a detached helper that clears inherited `WT_SESSION`, opens a fresh WT window via the official new-window targeting syntax, and then closes the old WT window handle so the updated app replaces the previous terminal session; only fall back to plain `pwsh.exe -File ...` when `wt.exe` is unavailable.
 - Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1` and `SystemCleanup.ps1`; static review of installed-copy self-update argument flow and relaunch token handling.
-=======
-### Entry - 2026-03-25 (wt branch: self-update relaunch must do a true WT handoff)
-- Date: 2026-03-25
-- Problem: After `Update This Tool [7]` on the `wt` branch, the installed tool could update its files but still leave the previous Windows Terminal launcher alive, sometimes reopening the old main menu instead of handing off cleanly.
-- Root cause: The tracked repo had drifted behind the working installed runtime, the WT relaunch helper was not reliably targeting a replacement window/close handle, and the PowerShell main-menu path only broke out of the inner `switch` instead of exiting the outer launcher loop explicitly.
-- Guardrail/rule: On the `wt` branch, installed-copy self-update must capture the current WT window before any optional Explorer restart, relaunch via a replacement WT window (`wt.exe -w new new-tab ... -WtHosted`), and then exit the old PowerShell launcher loop explicitly so the previous menu cannot resume. Keep the tracked repo copies of `SystemCleanup.ps1` and `ManageUpdates.ps1` aligned with the tested installed runtime before debugging further WT handoff issues.
-- Files affected: `SystemCleanup.ps1`, `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
-- Validation/tests run: PowerShell parser validation on `SystemCleanup.ps1` and `ManageUpdates.ps1`; live VM retry of `Update This Tool [7]` reported working by user after the launcher-loop and WT relaunch fixes.
->>>>>>> 7e83c0d (Fix WT self-update relaunch handoff and backport live runtime state)

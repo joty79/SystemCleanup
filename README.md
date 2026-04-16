@@ -20,15 +20,9 @@
 | 🔧 | **[Full Cleanup](#-full-cleanup)** | SFC → DISM `/ResetBase` → WinSxS Temp cleanup in a single automated flow |
 | ⚡ | **[InFlight Cleanup](#-inflight-cleanup)** | Quick-clean locked files from `WinSxS\Temp` using `MoveFileEx` |
 | 💾 | **[Live SoftwareDistribution Cleanup](#-live-softwaredistribution-cleanup)** | Clean the live `SoftwareDistribution\Download` cache without resetting update history |
-<<<<<<< HEAD
 | 🚚 | **[Delivery Optimization Cleanup + Disable](#-delivery-optimization-cleanup--disable)** | Clear the Delivery Optimization cache and safely force peer-to-peer sharing off |
 | 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, clean stale backups, block Win11 upgrade |
-| ⬇️ | **[Self-Update](#-self-update)** | Launch the sibling InstallerCore updater from the main menu with smart repo/install detection |
-=======
-| 🚚 | **[Delivery Optimization Cleanup + Disable](#-delivery-optimization-cleanup--disable)** | Clear the Delivery Optimization cache and disable peer-to-peer sharing safely |
-| 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, clean stale backups, block Win11 upgrade |
-| 🔁 | **[Tool Self-Update](#-tool-self-update-installercore)** | Update the tool via InstallerCore and relaunch the installed WT session cleanly |
->>>>>>> 7e83c0d (Fix WT self-update relaunch handoff and backport live runtime state)
+| 🔁 | **[Tool Self-Update](#-tool-self-update-installercore)** | Update the tool via InstallerCore with smart repo/install detection |
 | 📦 | **[Installer](#-installation)** | One-command setup with context menu registration and GitHub updates |
 
 ---
@@ -73,16 +67,11 @@ The action-oriented main-menu entries now open a confirmation panel first, so en
 
 When a `DISM` step fails, the launcher also prints the native exit code, points directly to `C:\Windows\Logs\DISM\dism.log` and `C:\Windows\Logs\CBS\CBS.log`, and shows a short ranked summary of the most relevant recent `DISM` / `CBS` clues in a compact format that remains readable in narrow Windows Terminal panes.
 
-Main-menu option `[6]` opens a wider non-compact `DISM` / `CBS` failure view so the same servicing clues are easier to read outside the WT split-pane flow.
-<<<<<<< HEAD
-
 Main-menu option `[4]` shows the live Delivery Optimization state directly in the gray description line and lets you clear the Delivery Optimization cache while safely forcing `DownloadMode = 0 (CdnOnly)` so peer-to-peer sharing stays off.
 
 Main-menu option `[7]` is a launcher-level self-update shortcut. It detects whether the tool is running from a git repo, an installed copy, or a portable copy, then dispatches to the sibling `Install.ps1` with the most sensible `InstallerCore` update action automatically.
-=======
->>>>>>> 7e83c0d (Fix WT self-update relaunch handoff and backport live runtime state)
 
-On the experimental `wt` branch, the main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing. In WT sessions, `Full Cleanup` opens in a dedicated split pane and runs through `cmd.exe`, preserving the familiar native `% progress` display for `SFC` and `DISM`.
+The main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing. In WT sessions, `Full Cleanup` opens in a dedicated split pane and runs through `cmd.exe`, preserving the familiar native `% progress` display for `SFC` and `DISM`.
 
 ### Usage
 
@@ -173,28 +162,18 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\CleanInFlight.ps1 -SilentCaller
 
 ## 🚚 Delivery Optimization Cleanup + Disable
 
-<<<<<<< HEAD
 > Clear the Delivery Optimization cache and safely force peer-to-peer Delivery Optimization off without breaking normal Microsoft/CDN downloads.
-
-- The main menu shows the live Delivery Optimization state as `Disabled` / `Enabled` plus the current cache size
-- The action uses the native `Delete-DeliveryOptimizationCache` cmdlet instead of manually deleting random files
-- Safe disable is implemented as `DODownloadMode = 0 (CdnOnly)`, which disables peer-to-peer caching while still allowing normal Windows Update / Microsoft Store downloads
-- The tool also shows the effective mode/provider and the working cache path so VM testing is easier
-- The confirmation step now follows the same cleaner interaction blueprint as the self-update panel: `Enter` runs the action, `ESC` cancels back to the main menu, and the active Delivery Optimization values are highlighted in bright green
-
-This is intentionally **not** implemented as `Disable-Service DoSvc`, because that is a riskier way to interfere with the Delivery Optimization stack than simply forcing peer-sharing off.
-=======
-> Clears the Delivery Optimization cache and switches Windows to CDN-only downloads so peer-to-peer sharing is turned off without breaking normal update downloads.
 
 - Main menu option `[4]`
 - The gray description line shows the current Delivery Optimization status and cache size
-- Clears cache with `Delete-DeliveryOptimizationCache`
-- Sets `DODownloadMode = 0` (`CdnOnly`) so Windows Update / Store still download from Microsoft/CDN
-- Tries to refresh `DoSvc` immediately so the new policy takes effect sooner
-- Intended to stop peer-to-peer update sharing, not to disable Windows Update itself
+- The action uses the native `Delete-DeliveryOptimizationCache` cmdlet instead of manually deleting random files
+- Safe disable is implemented as `DODownloadMode = 0 (CdnOnly)`, which disables peer-to-peer caching while still allowing normal Windows Update / Microsoft Store downloads
+- The tool also shows the effective mode/provider and the working cache path so VM testing is easier
+- The confirmation step follows the same cleaner interaction blueprint as the self-update panel: `Enter` runs the action, `ESC` cancels back to the main menu, and the active Delivery Optimization values are highlighted in bright green
+
+This is intentionally **not** implemented as `Disable-Service DoSvc`, because that is a riskier way to interfere with the Delivery Optimization stack than simply forcing peer-sharing off.
 
 **From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 4*
->>>>>>> 7e83c0d (Fix WT self-update relaunch handoff and backport live runtime state)
 
 ---
 
@@ -316,8 +295,7 @@ Selection: 'KB5034441'  ← hide by KB number
 
 ---
 
-<<<<<<< HEAD
-## ⬇️ Self-Update
+## 🔁 Tool Self-Update (InstallerCore)
 
 > A main-menu shortcut that reuses the existing InstallerCore-generated `Install.ps1` instead of inventing a second updater flow inside the launcher.
 
@@ -325,34 +303,17 @@ Selection: 'KB5034441'  ← hide by KB number
 - If the launcher is running from a git working copy, it uses `DownloadLatest` against the current repo folder
 - If the launcher is running from an installed copy with `state\install-meta.json`, it uses `UpdateGitHub` for the installed tool
 - If the launcher is running from a portable folder, it falls back to `DownloadLatest`
-- The gray description line shows the detected updater defaults directly in the main menu, for example `Repo copy • GitHub/wt`, `Installed copy • GitHub/master`, or `Installed copy • Local`
+- The gray description line shows the detected updater defaults directly in the main menu, for example `Repo copy • GitHub/master`, `Installed copy • GitHub/master`, or `Installed copy • Local`
 - The self-update screen shows the default `Installer Mode` plus either `GitHub branch` or `Local source`
 - The choice block is split into clear per-line actions: `Enter` uses shown defaults, `E` opens the normal `Install.ps1` interactive menu, and `ESC` cancels
 - Pressing `ESC` in that self-update choice panel returns directly to the main launcher menu without the extra generic pause prompt
 - For installed copies, a successful InstallerCore `Install` / `Update` run saves the chosen `package_source` and `github_ref` into `state\install-meta.json`, so the next launcher run reuses those defaults
 - For repo copies, the default GitHub branch follows the branch currently checked out in `.git`
 - When self-update is started from an installed `SystemCleanup` session, the updater skips the old Explorer-folder reopen behavior, then asks how to come back up: `Enter = relaunch app only`, any other key = `restart Explorer + relaunch app`
-- When `wt.exe` is available, that relaunch now uses a detached helper that clears inherited `WT_SESSION`, opens a **new Windows Terminal window** with the official new-window targeting syntax, and then closes the old WT window so the updated app replaces the previous window instead of accumulating extra tabs/windows
+- When `wt.exe` is available, that relaunch uses a detached helper that clears inherited `WT_SESSION`, opens a **new Windows Terminal window**, and then closes the old WT window so the updated app replaces the previous window instead of accumulating extra tabs/windows
 - The Explorer refresh path intentionally does **not** reopen a folder window; it only restarts the shell and then relaunches `SystemCleanup.ps1`
 
-This keeps updater logic aligned with `InstallerCore`, avoids duplicating the source/branch chooser inside the launcher, and makes the pattern a good blueprint for other PowerShell main-menu tools that already ship a sibling `Install.ps1`.
-=======
-## 🔁 Tool Self-Update (InstallerCore)
-
-> Updates the current repo copy or installed copy through the sibling `Install.ps1`, then relaunches the updated tool with a proper WT handoff on the experimental branch.
-
-- Main menu option `[7]`
-- Detects whether the launcher is running from a repo copy, installed copy, or portable copy
-- Uses the remembered Local/GitHub source from `state\install-meta.json` for installed copies
-- `Enter` uses the shown defaults, while `E` opens the full InstallerCore menu
-- After a successful installed-copy update:
-  - `Enter` = relaunch app only
-  - any other key = restart Explorer + relaunch app
-  - the `wt` handoff opens a replacement Windows Terminal window and closes the previous launcher window
-- The Explorer restart path avoids reopening folder windows and avoids forcing a second `explorer.exe` process
-
 **From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 7*
->>>>>>> 7e83c0d (Fix WT self-update relaunch handoff and backport live runtime state)
 
 ---
 

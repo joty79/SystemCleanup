@@ -5,3 +5,5 @@ SystemCleanup.lnk
 SystemCleanup.rar
 dism_Cleanup.ps1
 temp_test.cmd
+logs/
+state/
