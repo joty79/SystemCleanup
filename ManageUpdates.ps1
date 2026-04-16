@@ -29,8 +29,6 @@ $script:Ui = @{
 # 🔸 Force UTF-8 Encoding
 $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-Initialize-SystemCleanupMetadata
-
 function Initialize-SystemCleanupMetadata {
     if (-not (Test-Path -LiteralPath $script:AppMetadataPath -PathType Leaf)) {
         return
@@ -105,6 +103,8 @@ function Show-SystemCleanupHeader {
     }
     Write-Host ''
 }
+
+Initialize-SystemCleanupMetadata
 
 # ─────────────────────────────────────────────
 # 🔵 HELPER: Read single key press (for menu)
