@@ -2,6 +2,14 @@
 
 All notable user-facing changes for `SystemCleanup` are recorded here.
 
+## [2026-04-24]
+
+### Changed
+
+- Aligned main-menu option `[7]` with the `InstallerCore` In-App Update UI Contract and renamed it to `Update App`.
+- Updated the app-owned update flow to show a visible progress panel, tail recent `logs\installer.log` output, use `DownloadLatest -NoSelfRelaunch` for working-copy updates, relaunch the updated app host, and exit the old launcher host.
+- Regenerated `Install.ps1` from the current `InstallerCore` profile/template before applying the app-side update UI changes.
+
 ## [2026-04-16]
 
 ### Changed

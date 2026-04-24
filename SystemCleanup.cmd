@@ -111,7 +111,7 @@ echo.
 echo    %cMagenta%[ 6 ]%cReset% Last DISM/CBS Failure Details
 echo          %cGray%Full-width recent servicing log view%cReset%
 echo.
-echo    %cCyan%[ 7 ]%cReset% Update This Tool (InstallerCore)
+echo    %cCyan%[ 7 ]%cReset% Update App (InstallerCore)
 echo          %cGray%!ToolSelfUpdateLine!%cReset%
 echo.
 echo    %cRed%[ ESC ]%cReset% Close / Cancel
@@ -277,7 +277,7 @@ echo.
 goto :Menu
 
 REM ---------------------------------------------------------
-REM OPTION 7: Update This Tool (InstallerCore)
+REM OPTION 7: Update App (InstallerCore)
 REM ---------------------------------------------------------
 :ToolSelfUpdate
 cls

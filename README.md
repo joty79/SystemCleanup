@@ -22,7 +22,7 @@
 | 💾 | **[Live SoftwareDistribution Cleanup](#-live-softwaredistribution-cleanup)** | Clean the live `SoftwareDistribution\Download` cache without resetting update history |
 | 🚚 | **[Delivery Optimization Cleanup + Disable](#-delivery-optimization-cleanup--disable)** | Clear the Delivery Optimization cache and safely force peer-to-peer sharing off |
 | 🔄 | **[Windows Update Manager](#-windows-update-manager)** | Hide/unhide/list updates, reset cache, clean stale backups, block Win11 upgrade |
-| 🔁 | **[Tool Self-Update](#-tool-self-update-installercore)** | Update the tool via InstallerCore with smart repo/install detection |
+| 🔁 | **[Update App](#-update-app-installercore)** | Update the app via InstallerCore with visible progress, recent output, and relaunch |
 | 📦 | **[Installer](#-installation)** | One-command setup with context menu registration and GitHub updates |
 
 ---
@@ -69,7 +69,7 @@ When a `DISM` step fails, the launcher also prints the native exit code, points 
 
 Main-menu option `[4]` shows the live Delivery Optimization state directly in the gray description line and lets you clear the Delivery Optimization cache while safely forcing `DownloadMode = 0 (CdnOnly)` so peer-to-peer sharing stays off.
 
-Main-menu option `[7]` is a launcher-level self-update shortcut. It detects whether the tool is running from a git repo, an installed copy, or a portable copy, then dispatches to the sibling `Install.ps1` with the most sensible `InstallerCore` update action automatically.
+Main-menu option `[7]` is the launcher-level `Update App` shortcut. It detects whether the tool is running from a git repo, an installed copy, or a portable copy, then dispatches to the sibling `Install.ps1` with the most sensible `InstallerCore` update action automatically.
 
 The main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing. In WT sessions, `Full Cleanup` opens in a dedicated split pane and runs through `cmd.exe`, preserving the familiar native `% progress` display for `SFC` and `DISM`.
 
@@ -295,23 +295,27 @@ Selection: 'KB5034441'  ← hide by KB number
 
 ---
 
-## 🔁 Tool Self-Update (InstallerCore)
+## 🔁 Update App (InstallerCore)
 
-> A main-menu shortcut that reuses the existing InstallerCore-generated `Install.ps1` instead of inventing a second updater flow inside the launcher.
+> A main-menu shortcut that reuses the existing InstallerCore-generated `Install.ps1` while the app owns progress, recent output, relaunch, and old-host exit.
 
 - Main menu option `[7]`
 - If the launcher is running from a git working copy, it uses `DownloadLatest` against the current repo folder
 - If the launcher is running from an installed copy with `state\install-meta.json`, it uses `UpdateGitHub` for the installed tool
 - If the launcher is running from a portable folder, it falls back to `DownloadLatest`
+- The update runs inside the current app session with a visible `Update App` progress panel
+- Recent output is tailed from `logs\installer.log` so the installer is not a black box
+- Working-copy updates use `DownloadLatest -NoSelfRelaunch`, so the app owns the relaunch instead of spawning a second installer window
 - The gray description line shows the detected updater defaults directly in the main menu, for example `Repo copy • GitHub/master`, `Installed copy • GitHub/master`, or `Installed copy • Local`
 - The self-update screen shows the default `Installer Mode` plus either `GitHub branch` or `Local source`
 - The choice block is split into clear per-line actions: `Enter` uses shown defaults, `E` opens the normal `Install.ps1` interactive menu, and `ESC` cancels
 - Pressing `ESC` in that self-update choice panel returns directly to the main launcher menu without the extra generic pause prompt
 - For installed copies, a successful InstallerCore `Install` / `Update` run saves the chosen `package_source` and `github_ref` into `state\install-meta.json`, so the next launcher run reuses those defaults
 - For repo copies, the default GitHub branch follows the branch currently checked out in `.git`
-- When self-update is started from an installed `SystemCleanup` session, the updater skips the old Explorer-folder reopen behavior, then asks how to come back up: `Enter = relaunch app only`, any other key = `restart Explorer + relaunch app`
+- When `Update App` is started from an installed `SystemCleanup` session, the updater skips the old Explorer-folder reopen behavior, then asks how to come back up: `Enter = relaunch app only`, any other key = `restart Explorer + relaunch app`
 - When `wt.exe` is available, that relaunch uses a detached helper that clears inherited `WT_SESSION`, opens a **new Windows Terminal window**, and then closes the old WT window so the updated app replaces the previous window instead of accumulating extra tabs/windows
 - The Explorer refresh path intentionally does **not** reopen a folder window; it only restarts the shell and then relaunches `SystemCleanup.ps1`
+- After a successful app-owned update, the old launcher host exits so the refreshed app replaces it
 
 **From context menu** — *Right-click desktop or folder background → System Tools → Windows Update CleanUp → Option 7*
 

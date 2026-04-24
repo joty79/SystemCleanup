@@ -8,6 +8,7 @@
 - Keep file ownership explicit from registry chain: `SystemCleanup.reg` -> `SystemCleanup.cmd` -> `CleanInFlight.ps1`.
 - Keep context-menu target under `DesktopBackground\Shell\SystemCleanup` for install writes.
 - Keep installer behavior template-driven via generated `Install.ps1` from InstallerCore.
+- For app-side update UI, follow the `InstallerCore` In-App Update UI Contract with the `WT TUI` adapter unless a future host-specific exception is documented. The app owns progress, recent installer output, relaunch, and old-host exit; `Install.ps1` owns backend update mechanics only.
 - Do not remove legacy/test artifacts unless explicitly requested; exclude them from repo tracking by default.
 
 ## Decision Log
@@ -484,3 +485,11 @@
 - Guardrail/rule: When `InstallerCore` changes installer behavior or install metadata contract, regenerate `SystemCleanup\Install.ps1` instead of leaving an older generated snapshot in place. This repo should inherit template-level fixes like null-safe `Read-Host`, info-only `-NoExplorerRestart`, and commit-aware `install-meta.json` provenance fields.
 - Files affected: `Install.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: Regenerated `Install.ps1` from `InstallerCore\profiles\SystemCleanup.json`; PowerShell parser validation passed for `Install.ps1`; static diff review confirmed only the expected template deltas.
+
+### Entry - 2026-04-24 (UPDATEUI contract alignment)
+- Date: 2026-04-24
+- Problem: Main-menu option `[7]` reused the generated installer backend, but the app-side update flow still did not fully match the `InstallerCore` In-App Update UI Contract because progress/recent-output/relaunch ownership was not explicit enough.
+- Root cause: The launcher had a mature self-update bridge from before the formal `UPDATEUI` contract, so it mixed direct installer execution with app-side relaunch logic instead of making the app own the full visible update lifecycle.
+- Guardrail/rule: Use the `WT TUI` adapter for `SystemCleanup`. The generated `Install.ps1` remains the backend, but `SystemCleanup` must show the `Update App` progress panel, tail `logs\installer.log`, use `DownloadLatest -NoSelfRelaunch` for working-copy updates, relaunch the updated app host, and exit the old launcher host on success.
+- Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `SystemCleanup.cmd`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`.
+- Validation/tests run: Parser validation passed for `SystemCleanup.ps1`, `ManageUpdates.ps1`, `Install.ps1`, and `CleanInFlight.ps1`; regenerated `Install.ps1` from `InstallerCore\profiles\SystemCleanup.json`; non-admin local-source update smoke completed with exit code `0`; installed file hash readback matched repo files except the intentionally patched `Launch-SystemCleanup.vbs`; registry command readback confirmed installed launcher paths.

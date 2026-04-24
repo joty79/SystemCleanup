@@ -771,7 +771,7 @@ function Get-MainMenuOptions {
         }
         [pscustomobject]@{
             Key         = '7'
-            Label       = 'Update This Tool'
+            Label       = 'Update App'
             Description = $ToolSelfUpdateLine
             Detail      = 'InstallerCore'
             Color       = $script:C.Info

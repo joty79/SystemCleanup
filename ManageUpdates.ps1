@@ -854,6 +854,111 @@ function Read-EnterOrEscChoice {
     }
 }
 
+function Get-RecentTextFileLines {
+    param(
+        [AllowEmptyString()][string]$Path,
+        [int]$TailCount = 10
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return @()
+    }
+
+    try {
+        return @(Get-Content -LiteralPath $Path -Tail $TailCount -ErrorAction Stop | ForEach-Object { [string]$_ })
+    }
+    catch {
+        return @()
+    }
+}
+
+function Show-ToolUpdateProgressPanel {
+    param(
+        [string]$Message,
+        [ValidateSet('Info', 'Good', 'Warn', 'Error')]
+        [string]$Level = 'Info',
+        [string[]]$RecentLines = @(),
+        [switch]$AutoRestart
+    )
+
+    $messageColor = switch ($Level) {
+        'Good' { $script:Ui.OK }
+        'Warn' { $script:Ui.Warn }
+        'Error' { $script:Ui.Fail }
+        default { $script:Ui.H1 }
+    }
+
+    Show-SystemCleanupHeader -SectionTitle 'Update App' -SectionSubtitle 'InstallerCore'
+    Write-Host "  $messageColor$Message$($script:Ui.Reset)"
+
+    if (@($RecentLines).Count -gt 0) {
+        Write-Host ''
+        Write-Host "  $($script:Ui.H1)$([char]0x25C6) Recent Output $($script:Ui.Dim)$([string]::new([char]0x2500, 60))$($script:Ui.Reset)"
+        foreach ($line in @($RecentLines | Select-Object -Last 10)) {
+            $displayLine = [string]$line
+            if ($displayLine.Length -gt 118) {
+                $displayLine = $displayLine.Substring(0, 115) + '...'
+            }
+            Write-Host "  $($script:Ui.Dim)$displayLine$($script:Ui.Reset)"
+        }
+    }
+
+    Write-Host ''
+    Write-Host "  $($script:Ui.H1)$([char]0x25C6) Commands $($script:Ui.Dim)$([string]::new([char]0x2500, 64))$($script:Ui.Reset)"
+    if ($AutoRestart) {
+        Write-Host "  $($script:Ui.OK)Restarting SystemCleanup with updated files...$($script:Ui.Reset)"
+    }
+    else {
+        Write-Host "  $($script:Ui.Fail)$($script:Ui.Bold)ESC$($script:Ui.Reset) $($script:Ui.Dim)back$($script:Ui.Reset)"
+    }
+}
+
+function Invoke-InstallerCoreUpdateProcess {
+    param(
+        [Parameter(Mandatory)][string]$PwshExe,
+        [Parameter(Mandatory)][string[]]$ArgumentList,
+        [Parameter(Mandatory)][string]$WorkingDirectory,
+        [Parameter(Mandatory)][string]$ProgressMessage,
+        [Parameter(Mandatory)][string]$InstallerLogPath
+    )
+
+    $stdoutPath = Join-Path $env:TEMP ("SystemCleanup_updater_out_{0}.log" -f [guid]::NewGuid().ToString('N'))
+    $stderrPath = Join-Path $env:TEMP ("SystemCleanup_updater_err_{0}.log" -f [guid]::NewGuid().ToString('N'))
+
+    try {
+        $process = Start-Process -FilePath $PwshExe -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden -PassThru -ErrorAction Stop
+        while (-not $process.HasExited) {
+            $recentLines = @((Get-RecentTextFileLines -Path $InstallerLogPath -TailCount 8) + (Get-RecentTextFileLines -Path $stderrPath -TailCount 3))
+            Show-ToolUpdateProgressPanel -Message $ProgressMessage -Level 'Info' -RecentLines $recentLines
+            Start-Sleep -Milliseconds 250
+        }
+
+        $process.Refresh()
+        $exitCode = [int]$process.ExitCode
+        $finalLines = @((Get-RecentTextFileLines -Path $InstallerLogPath -TailCount 8) + (Get-RecentTextFileLines -Path $stderrPath -TailCount 5))
+        return [pscustomobject]@{
+            ExitCode = $exitCode
+            RecentLines = $finalLines
+        }
+    }
+    catch {
+        return [pscustomobject]@{
+            ExitCode = 9999
+            RecentLines = @("Could not start updater process: $($_.Exception.Message)")
+        }
+    }
+    finally {
+        foreach ($tempPath in @($stdoutPath, $stderrPath)) {
+            try {
+                if (Test-Path -LiteralPath $tempPath -PathType Leaf) {
+                    Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+                }
+            }
+            catch {}
+        }
+    }
+}
+
 if (-not ('SystemCleanup.NativeUser32' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -1052,7 +1157,7 @@ function Restart-ExplorerShellNoReopen {
 function Invoke-InstallerCoreToolUpdate {
     $state = Get-InstallerCoreUpdateState
 
-    Show-SystemCleanupHeader -SectionTitle 'Tool Self-Update' -SectionSubtitle 'InstallerCore'
+    Show-SystemCleanupHeader -SectionTitle 'Update App' -SectionSubtitle 'InstallerCore'
 
     if (-not $state.IsAvailable) {
         Write-Host "  ❌ $($state.StatusLine)" -ForegroundColor Red
@@ -1085,9 +1190,7 @@ function Invoke-InstallerCoreToolUpdate {
     Write-Host "  ⚠️  This will update the tool via the sibling InstallerCore-generated Install.ps1." -ForegroundColor Yellow
     if ($state.DefaultAction -eq 'DownloadLatest') {
         Write-Host "      • Current folder will be refreshed in place from GitHub" -ForegroundColor Gray
-        if ($state.RelaunchesInstaller) {
-            Write-Host "      • InstallerCore may relaunch the updated installer after download" -ForegroundColor Gray
-        }
+        Write-Host "      • The launcher will show update progress and relaunch the updated app" -ForegroundColor Gray
         if ($state.Mode -eq 'Repo copy') {
             Write-Host "      • Repo-copy defaults follow the currently checked-out git branch" -ForegroundColor Gray
         }
@@ -1095,11 +1198,13 @@ function Invoke-InstallerCoreToolUpdate {
     elseif ($state.InstallerMode -eq 'Local') {
         Write-Host "      • Installed copy under %LOCALAPPDATA% will be updated from the recorded local source" -ForegroundColor Gray
         Write-Host "      • A successful update will save that Local/GitHub choice for next time" -ForegroundColor Gray
+        Write-Host "      • The launcher will show update progress and relaunch the updated app" -ForegroundColor Gray
         Write-Host "      • Use E if you want the full InstallerCore menu for GitHub/source switching" -ForegroundColor Gray
     }
     else {
         Write-Host "      • Installed copy under %LOCALAPPDATA% will be updated from GitHub" -ForegroundColor Gray
         Write-Host "      • A successful update will save the chosen GitHub branch for next time" -ForegroundColor Gray
+        Write-Host "      • The launcher will show update progress and relaunch the updated app" -ForegroundColor Gray
         Write-Host "      • Registry/verification paths stay under the normal InstallerCore update flow" -ForegroundColor Gray
     }
     Write-Host ""
@@ -1133,35 +1238,51 @@ function Invoke-InstallerCoreToolUpdate {
             $launcherArgs += @('-GitHubRef', $state.GitHubBranch)
         }
 
+        if ($state.DefaultAction -eq 'DownloadLatest') {
+            $launcherArgs += '-NoSelfRelaunch'
+        }
         if ($state.Mode -eq 'Installed copy') {
             $launcherArgs += '-NoExplorerRestart'
         }
 
-        Write-Host "`n  Launching InstallerCore update flow..." -ForegroundColor Yellow
-        & $pwshExe @launcherArgs
-        $exitCode = $LASTEXITCODE
+        $progressMessage = if ($state.DefaultAction -eq 'DownloadLatest') {
+            'Updating this working copy inside the current app session...'
+        }
+        elseif ($state.InstallerMode -eq 'Local') {
+            'Updating from the recorded local source inside the current app session...'
+        }
+        else {
+            'Updating from GitHub inside the current app session...'
+        }
+        $installerLogPath = Join-Path $PSScriptRoot 'logs\installer.log'
+        $updateProcessResult = Invoke-InstallerCoreUpdateProcess -PwshExe $pwshExe -ArgumentList $launcherArgs -WorkingDirectory $PSScriptRoot -ProgressMessage $progressMessage -InstallerLogPath $installerLogPath
+        $exitCode = [int]$updateProcessResult.ExitCode
+        $recentLines = @($updateProcessResult.RecentLines)
     }
 
     Write-Host ""
-    $shouldRelaunchTool = ($state.Mode -eq 'Installed copy' -and $launchMode -ne 'EDIT' -and ($exitCode -eq 0 -or $exitCode -eq 2))
+    $shouldRelaunchTool = ($launchMode -ne 'EDIT' -and ($exitCode -eq 0 -or $exitCode -eq 2))
     if ($shouldRelaunchTool) {
         if ($exitCode -eq 0) {
-            Write-Host "  ✅ Update flow completed successfully." -ForegroundColor Green
+            Show-ToolUpdateProgressPanel -Message 'Update finished. Restarting the updated app host and closing this window...' -Level 'Good' -RecentLines $recentLines -AutoRestart
         }
         else {
-            Write-Host "  ⚠️ Update flow completed with warnings." -ForegroundColor Yellow
+            Show-ToolUpdateProgressPanel -Message 'Update finished with warnings. Restarting the updated app host and closing this window...' -Level 'Warn' -RecentLines $recentLines -AutoRestart
         }
 
         $launcherScriptPath = Join-Path (Split-Path -Path $state.InstallScriptPath -Parent) 'SystemCleanup.ps1'
-        $postUpdateChoice = Read-PostUpdateRelaunchChoice
-        $restartExplorerToo = ($postUpdateChoice -eq 'APP_AND_EXPLORER')
+        $restartExplorerToo = $false
+        if ($state.Mode -eq 'Installed copy') {
+            $postUpdateChoice = Read-PostUpdateRelaunchChoice
+            $restartExplorerToo = ($postUpdateChoice -eq 'APP_AND_EXPLORER')
+        }
 
         if ($restartExplorerToo) {
             Write-Host ''
             Write-Host '  Restarting Explorer shell before relaunching the updated app...' -ForegroundColor Yellow
             $null = Restart-ExplorerShellNoReopen
         }
-        else {
+        elseif ($state.Mode -eq 'Installed copy') {
             Write-Host ''
             Write-Host '  Relaunching the updated app without restarting Explorer...' -ForegroundColor Cyan
         }
@@ -1186,6 +1307,11 @@ function Invoke-InstallerCoreToolUpdate {
     }
     if ($exitCode -eq 2) {
         Write-Host "  ⚠️ Update flow completed with warnings." -ForegroundColor Yellow
+        return
+    }
+
+    if ($launchMode -ne 'EDIT') {
+        Show-ToolUpdateProgressPanel -Message ("Update failed with exit code {0}." -f $exitCode) -Level 'Error' -RecentLines $recentLines
         return
     }
 
