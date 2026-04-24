@@ -476,3 +476,11 @@
 - Guardrail/rule: For self-update started from an installed `SystemCleanup` session, call `Install.ps1` with `-NoExplorerRestart`, then ask the user how to come back up after a successful installed update: `Enter = relaunch app only`, any other key = `restart Explorer + relaunch app`. The Explorer-refresh path must not reopen a folder window and must avoid `Start-Process explorer.exe`; rely on the shell auto-restart path instead to reduce ghost/zombie Explorer instances. For WT-capable relaunch, do not target the existing WT window with `-w 0`, because that can create a second tab beside the old app. Use a detached helper that clears inherited `WT_SESSION`, opens a fresh WT window via the official new-window targeting syntax, and then closes the old WT window handle so the updated app replaces the previous terminal session; only fall back to plain `pwsh.exe -File ...` when `wt.exe` is unavailable.
 - Files affected: `ManageUpdates.ps1`, `SystemCleanup.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`
 - Validation/tests run: PowerShell parser validation on `ManageUpdates.ps1` and `SystemCleanup.ps1`; static review of installed-copy self-update argument flow and relaunch token handling.
+
+### Entry - 2026-04-24 (Generated installer must stay in sync with current InstallerCore)
+- Date: 2026-04-24
+- Problem: The generated `Install.ps1` had fallen behind the current `InstallerCore` template, so it still missed the latest null-safe prompt handling and the richer commit-aware install metadata.
+- Root cause: The repo was already onboarded to `InstallerCore`, but no downstream regenerate happened after the latest template fixes landed.
+- Guardrail/rule: When `InstallerCore` changes installer behavior or install metadata contract, regenerate `SystemCleanup\Install.ps1` instead of leaving an older generated snapshot in place. This repo should inherit template-level fixes like null-safe `Read-Host`, info-only `-NoExplorerRestart`, and commit-aware `install-meta.json` provenance fields.
+- Files affected: `Install.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`
+- Validation/tests run: Regenerated `Install.ps1` from `InstallerCore\profiles\SystemCleanup.json`; PowerShell parser validation passed for `Install.ps1`; static diff review confirmed only the expected template deltas.

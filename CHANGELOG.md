@@ -6,6 +6,7 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 
 ### Changed
 
+- Regenerated `Install.ps1` from the latest `InstallerCore` template so `SystemCleanup` now inherits the current installer fixes and commit-aware install metadata contract.
 - Migrated the primary launcher to the newer PowerShell UI pattern with a versioned header, WT-safe rendering, arrow-key main-menu navigation, and number shortcuts.
 - Fixed the main-menu `ESC`/`Close / Cancel` path so it now exits the launcher host cleanly instead of just breaking the inner menu switch.
 - Extended the new versioned header style into submenu screens such as `Full Cleanup`, `InFlight Cleanup`, `DISM/CBS Failure Details`, and `Windows Update Manager`, so the app no longer drops back to the older pre-template visual language after leaving the main menu.
