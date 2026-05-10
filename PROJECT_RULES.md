@@ -499,5 +499,6 @@
 - Problem: `Update App` could still report a same-version app as up to date without comparing local/installed commit provenance against the latest remote commit, and repo-copy updates still risked using archive-style refresh semantics.
 - Root cause: `SystemCleanup` had the older version-only status check and a pre-contract repo-copy updater path that treated `DownloadLatest` as the default for git working copies.
 - Guardrail/rule: `SystemCleanup` update status must track `LocalCommit`, `LatestCommit`, `SourceKind`, and dirty state; stale cached `UpToDate` must never hide a failed fresh check; git repo copies must update only through `git fetch` + fast-forward and refuse dirty workspaces.
+- Guardrail/rule: Any user-facing update behavior change must bump the canonical `app-metadata.json` version in the same change set.
 - Files affected: `SystemCleanup.ps1`, `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`.
 - Validation/tests run: Parser validation for `SystemCleanup.ps1`, `ManageUpdates.ps1`, `Install.ps1`, and `CleanInFlight.ps1`; non-interactive repo and installed status probes; git fast-forward dirty-workspace refusal probe; local-source `Install.ps1 -Action Update -PackageSource Local -Force -NoExplorerRestart`; installed file hash readback; installed parser validation; registry command readback.

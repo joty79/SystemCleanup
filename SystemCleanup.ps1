@@ -11,7 +11,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $script:LogDir = ''
 $script:LogFile = ''
 $script:AppName = 'SystemCleanup'
-$script:AppVersion = '1.0.0'
+$script:AppVersion = '1.0.1'
 $script:AppGitHubRepo = 'joty79/SystemCleanup'
 $script:AppMetadataPath = Join-Path $PSScriptRoot 'app-metadata.json'
 $script:StatePath = Join-Path $PSScriptRoot 'state'

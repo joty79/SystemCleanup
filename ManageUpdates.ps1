@@ -11,7 +11,7 @@ param(
 $script:SkipReturnToMenuToken = '__SYSTEMCLEANUP_SKIP_RETURN_TO_MENU__'
 $script:RelaunchAndExitToken = '__SYSTEMCLEANUP_RELAUNCH_AND_EXIT__'
 $script:AppName = 'SystemCleanup'
-$script:AppVersion = '1.0.0'
+$script:AppVersion = '1.0.1'
 $script:AppMetadataPath = Join-Path $PSScriptRoot 'app-metadata.json'
 $script:AppUpdateStatusCachePath = Join-Path $PSScriptRoot 'state\app-update-status.json'
 $script:E = [char]27

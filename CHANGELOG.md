@@ -6,6 +6,7 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 
 ### Changed
 
+- Bumped the app metadata version to `1.0.1` for the commit-aware `Update App` behavior change.
 - Updated the app-side `Update App` status check to compare both app version and Git commit, so same-version newer commits are no longer hidden behind a stale `Up to date` result.
 - Hardened update-status caching so stale `UpToDate` records are not reused when a fresh remote check fails, while non-up-to-date warnings can still be shown as fallback context.
 - Changed repo-copy updates to use `git fetch` + fast-forward only and refuse dirty workspaces instead of overlaying a GitHub archive onto tracked files.
