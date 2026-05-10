@@ -54,10 +54,12 @@ function Get-SystemCleanupUpdateLabel {
 
     try {
         $cache = Get-Content -LiteralPath $script:AppUpdateStatusCachePath -Raw -ErrorAction Stop | ConvertFrom-Json
+        $branch = if ($cache.PSObject.Properties['Branch'] -and -not [string]::IsNullOrWhiteSpace([string]$cache.Branch)) { "GitHub $($cache.Branch)" } else { 'GitHub' }
         switch ([string]$cache.Status) {
-            'UpToDate' { return [pscustomobject]@{ Label = 'Up to date'; Color = $script:Ui.OK } }
+            'UpToDate' { return [pscustomobject]@{ Label = "Up to date with $branch"; Color = $script:Ui.OK } }
             'UpdateAvailable' { return [pscustomobject]@{ Label = 'Update available'; Color = $script:Ui.Warn } }
-            'LocalAhead' { return [pscustomobject]@{ Label = 'Local version ahead'; Color = $script:Ui.Warn } }
+            'LocalAhead' { return [pscustomobject]@{ Label = 'Workspace ahead'; Color = $script:Ui.Warn } }
+            'WorkspaceModified' { return [pscustomobject]@{ Label = 'Workspace modified'; Color = $script:Ui.Warn } }
             'Error' { return [pscustomobject]@{ Label = 'Update check failed'; Color = $script:Ui.Fail } }
             default { return [pscustomobject]@{ Label = 'Status unavailable'; Color = $script:Ui.Dim } }
         }
@@ -65,6 +67,65 @@ function Get-SystemCleanupUpdateLabel {
     catch {
         return [pscustomobject]@{ Label = 'Status unavailable'; Color = $script:Ui.Dim }
     }
+}
+
+function Get-ShortGitCommitText {
+    param(
+        [AllowEmptyString()]
+        [string]$Commit
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Commit)) {
+        return '--'
+    }
+
+    $normalizedCommit = $Commit.Trim()
+    if ($normalizedCommit.Length -le 7) {
+        return $normalizedCommit
+    }
+
+    return $normalizedCommit.Substring(0, 7)
+}
+
+function Get-SystemCleanupUpdateDetails {
+    $details = [ordered]@{
+        LocalVersion    = $script:AppVersion
+        LatestVersion   = '--'
+        LocalCommit     = '--'
+        LatestCommit    = '--'
+        SourceKind      = 'Unknown'
+        HasLocalChanges = $false
+        Branch          = '--'
+        Status          = 'Unknown'
+        Message         = 'Update status has not been checked yet.'
+        CheckedAt       = '--'
+    }
+
+    if (-not (Test-Path -LiteralPath $script:AppUpdateStatusCachePath -PathType Leaf)) {
+        return [pscustomobject]$details
+    }
+
+    try {
+        $cache = Get-Content -LiteralPath $script:AppUpdateStatusCachePath -Raw -ErrorAction Stop | ConvertFrom-Json
+        foreach ($name in @('LocalVersion', 'LatestVersion', 'SourceKind', 'Branch', 'Status', 'Message', 'CheckedAt')) {
+            if ($cache.PSObject.Properties[$name] -and -not [string]::IsNullOrWhiteSpace([string]$cache.$name)) {
+                $details[$name] = [string]$cache.$name
+            }
+        }
+        if ($cache.PSObject.Properties['LocalCommit']) {
+            $details.LocalCommit = Get-ShortGitCommitText -Commit ([string]$cache.LocalCommit)
+        }
+        if ($cache.PSObject.Properties['LatestCommit']) {
+            $details.LatestCommit = Get-ShortGitCommitText -Commit ([string]$cache.LatestCommit)
+        }
+        if ($cache.PSObject.Properties['HasLocalChanges']) {
+            $details.HasLocalChanges = [bool]$cache.HasLocalChanges
+        }
+    }
+    catch {
+    }
+
+    return [pscustomobject]$details
 }
 
 function Show-SystemCleanupHeader {
@@ -699,9 +760,9 @@ function Get-InstallerCoreUpdateState {
     $gitRoot = Join-Path $PSScriptRoot '.git'
     if (Test-Path -LiteralPath $gitRoot) {
         $state.Mode = 'Repo copy'
-        $state.InstallerMode = 'GitHub'
-        $state.DefaultAction = 'DownloadLatest'
-        $state.RelaunchesInstaller = $true
+        $state.InstallerMode = 'Git fast-forward'
+        $state.DefaultAction = 'GitFastForward'
+        $state.RelaunchesInstaller = $false
 
         $gitBranch = ''
         try {
@@ -721,7 +782,7 @@ function Get-InstallerCoreUpdateState {
 
         $state.GitHubBranch = $gitBranch
         $branchLabel = if ([string]::IsNullOrWhiteSpace($gitBranch)) { 'auto' } else { $gitBranch }
-        $state.StatusLine = "Repo copy • GitHub/$branchLabel"
+        $state.StatusLine = "Repo copy • Git/$branchLabel"
         return [pscustomobject]$state
     }
 
@@ -959,6 +1020,81 @@ function Invoke-InstallerCoreUpdateProcess {
     }
 }
 
+function Invoke-GitWorkingCopyUpdateProcess {
+    param(
+        [Parameter(Mandatory)][string]$WorkingDirectory,
+        [AllowEmptyString()][string]$Branch
+    )
+
+    $recentLines = [System.Collections.Generic.List[string]]::new()
+    function Add-RecentLine {
+        param([AllowEmptyString()][string]$Line)
+        if ([string]::IsNullOrWhiteSpace($Line)) {
+            return
+        }
+        [void]$recentLines.Add($Line)
+        while ($recentLines.Count -gt 12) {
+            $recentLines.RemoveAt(0)
+        }
+    }
+
+    $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+    if ($null -eq $gitCommand) {
+        Add-RecentLine 'git.exe was not found in PATH.'
+        return [pscustomobject]@{ ExitCode = 9001; RecentLines = @($recentLines) }
+    }
+
+    try {
+        $inside = (& git.exe -C $WorkingDirectory rev-parse --is-inside-work-tree 2>&1 | Out-String).Trim()
+        if ($inside -ne 'true') {
+            Add-RecentLine 'This folder is not a git working copy.'
+            return [pscustomobject]@{ ExitCode = 9002; RecentLines = @($recentLines) }
+        }
+
+        $dirty = (& git.exe -C $WorkingDirectory status --porcelain 2>&1 | Out-String).Trim()
+        if (-not [string]::IsNullOrWhiteSpace($dirty)) {
+            Add-RecentLine 'Working copy has local changes. Fast-forward update refused.'
+            Add-RecentLine 'Commit, stash, or discard local changes before updating this repo copy.'
+            return [pscustomobject]@{ ExitCode = 3; RecentLines = @($recentLines) }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($Branch)) {
+            $Branch = (& git.exe -C $WorkingDirectory branch --show-current 2>&1 | Out-String).Trim()
+        }
+        if ([string]::IsNullOrWhiteSpace($Branch)) {
+            Add-RecentLine 'Could not determine the current git branch.'
+            return [pscustomobject]@{ ExitCode = 9003; RecentLines = @($recentLines) }
+        }
+
+        Add-RecentLine ("Fetching origin/{0}..." -f $Branch)
+        $fetchText = (& git.exe -C $WorkingDirectory fetch --prune origin $Branch 2>&1 | Out-String).Trim()
+        foreach ($line in ($fetchText -split "`r?`n")) {
+            Add-RecentLine $line
+        }
+        if ($LASTEXITCODE -ne 0) {
+            return [pscustomobject]@{ ExitCode = $LASTEXITCODE; RecentLines = @($recentLines) }
+        }
+
+        $localHead = (& git.exe -C $WorkingDirectory rev-parse HEAD 2>&1 | Out-String).Trim()
+        $remoteHead = (& git.exe -C $WorkingDirectory rev-parse "origin/$Branch" 2>&1 | Out-String).Trim()
+        if (-not [string]::IsNullOrWhiteSpace($localHead) -and $localHead -eq $remoteHead) {
+            Add-RecentLine ("Already up to date with origin/{0}." -f $Branch)
+            return [pscustomobject]@{ ExitCode = 0; RecentLines = @($recentLines) }
+        }
+
+        Add-RecentLine ("Fast-forwarding to origin/{0}..." -f $Branch)
+        $mergeText = (& git.exe -C $WorkingDirectory merge --ff-only "origin/$Branch" 2>&1 | Out-String).Trim()
+        foreach ($line in ($mergeText -split "`r?`n")) {
+            Add-RecentLine $line
+        }
+        return [pscustomobject]@{ ExitCode = $LASTEXITCODE; RecentLines = @($recentLines) }
+    }
+    catch {
+        Add-RecentLine ("Git update failed: {0}" -f $_.Exception.Message)
+        return [pscustomobject]@{ ExitCode = 9999; RecentLines = @($recentLines) }
+    }
+}
+
 if (-not ('SystemCleanup.NativeUser32' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -1156,6 +1292,7 @@ function Restart-ExplorerShellNoReopen {
 
 function Invoke-InstallerCoreToolUpdate {
     $state = Get-InstallerCoreUpdateState
+    $updateDetails = Get-SystemCleanupUpdateDetails
 
     Show-SystemCleanupHeader -SectionTitle 'Update App' -SectionSubtitle 'InstallerCore'
 
@@ -1171,13 +1308,15 @@ function Invoke-InstallerCoreToolUpdate {
     Write-Host $state.Mode -ForegroundColor Green
     Write-Host '  ⚙️  Installer Mode:  ' -ForegroundColor DarkGray -NoNewline
     Write-Host $state.InstallerMode -ForegroundColor Green
-    if ($state.InstallerMode -eq 'GitHub') {
+    if ($state.InstallerMode -eq 'GitHub' -or $state.InstallerMode -eq 'Git fast-forward') {
         if (-not [string]::IsNullOrWhiteSpace($state.GitHubBranch)) {
-            Write-Host '  🌿 GitHub branch:   ' -ForegroundColor DarkGray -NoNewline
+            $branchLabelName = if ($state.InstallerMode -eq 'Git fast-forward') { '  🌿 Git branch:      ' } else { '  🌿 GitHub branch:   ' }
+            Write-Host $branchLabelName -ForegroundColor DarkGray -NoNewline
             Write-Host $state.GitHubBranch -ForegroundColor Green
         }
         else {
-            Write-Host '  🌿 GitHub branch:   ' -ForegroundColor DarkGray -NoNewline
+            $branchLabelName = if ($state.InstallerMode -eq 'Git fast-forward') { '  🌿 Git branch:      ' } else { '  🌿 GitHub branch:   ' }
+            Write-Host $branchLabelName -ForegroundColor DarkGray -NoNewline
             Write-Host 'auto-detect' -ForegroundColor Green
         }
     }
@@ -1186,9 +1325,41 @@ function Invoke-InstallerCoreToolUpdate {
         Write-Host $state.LocalSourcePath -ForegroundColor Green
     }
     Write-Host "  Install.ps1 path:   $($state.InstallScriptPath)" -ForegroundColor DarkGray
+    Write-Host ''
+    Write-Host '  Update status:      ' -ForegroundColor DarkGray -NoNewline
+    $statusColor = switch ([string]$updateDetails.Status) {
+        'UpToDate' { 'Green' }
+        'UpdateAvailable' { 'Yellow' }
+        'WorkspaceModified' { 'Yellow' }
+        'LocalAhead' { 'Cyan' }
+        'Error' { 'Red' }
+        default { 'Gray' }
+    }
+    Write-Host $updateDetails.Status -ForegroundColor $statusColor
+    Write-Host '  Current version:    ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $updateDetails.LocalVersion -ForegroundColor Green
+    Write-Host '  Latest version:     ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $updateDetails.LatestVersion -ForegroundColor Green
+    Write-Host '  Current commit:     ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $updateDetails.LocalCommit -ForegroundColor Green
+    Write-Host '  Latest commit:      ' -ForegroundColor DarkGray -NoNewline
+    Write-Host $updateDetails.LatestCommit -ForegroundColor Green
+    Write-Host '  Current source:     ' -ForegroundColor DarkGray -NoNewline
+    $sourceLabel = if ($updateDetails.HasLocalChanges) { "$($updateDetails.SourceKind) + local changes" } else { $updateDetails.SourceKind }
+    Write-Host $sourceLabel -ForegroundColor Green
+    Write-Host '  Last check:         ' -ForegroundColor DarkGray -NoNewline
+    Write-Host ($updateDetails.CheckedAt -replace 'T', ' ') -ForegroundColor DarkGray
+    if (-not [string]::IsNullOrWhiteSpace([string]$updateDetails.Message)) {
+        Write-Host "  $($updateDetails.Message)" -ForegroundColor DarkGray
+    }
     Write-Host ""
     Write-Host "  ⚠️  This will update the tool via the sibling InstallerCore-generated Install.ps1." -ForegroundColor Yellow
-    if ($state.DefaultAction -eq 'DownloadLatest') {
+    if ($state.DefaultAction -eq 'GitFastForward') {
+        Write-Host "      • Current git working copy will use fetch + fast-forward only" -ForegroundColor Gray
+        Write-Host "      • Dirty workspaces are refused instead of overwritten" -ForegroundColor Gray
+        Write-Host "      • The launcher will relaunch the app after a successful update" -ForegroundColor Gray
+    }
+    elseif ($state.DefaultAction -eq 'DownloadLatest') {
         Write-Host "      • Current folder will be refreshed in place from GitHub" -ForegroundColor Gray
         Write-Host "      • The launcher will show update progress and relaunch the updated app" -ForegroundColor Gray
         if ($state.Mode -eq 'Repo copy') {
@@ -1221,6 +1392,13 @@ function Invoke-InstallerCoreToolUpdate {
         Write-Host "`n  Opening the standard InstallerCore menu so you can choose Local/GitHub and branch options..." -ForegroundColor Yellow
         & $pwshExe -NoProfile -ExecutionPolicy Bypass -File $state.InstallScriptPath
         $exitCode = $LASTEXITCODE
+    }
+    elseif ($launchMode -eq 'DEFAULT' -and $state.DefaultAction -eq 'GitFastForward') {
+        $progressMessage = 'Updating this git working copy with fetch + fast-forward...'
+        Show-ToolUpdateProgressPanel -Message $progressMessage -Level 'Info' -RecentLines @("Branch: $($state.GitHubBranch)")
+        $updateProcessResult = Invoke-GitWorkingCopyUpdateProcess -WorkingDirectory $PSScriptRoot -Branch $state.GitHubBranch
+        $exitCode = [int]$updateProcessResult.ExitCode
+        $recentLines = @($updateProcessResult.RecentLines)
     }
     else {
         $launcherArgs = @(

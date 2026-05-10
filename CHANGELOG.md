@@ -2,6 +2,15 @@
 
 All notable user-facing changes for `SystemCleanup` are recorded here.
 
+## [2026-05-11]
+
+### Changed
+
+- Updated the app-side `Update App` status check to compare both app version and Git commit, so same-version newer commits are no longer hidden behind a stale `Up to date` result.
+- Hardened update-status caching so stale `UpToDate` records are not reused when a fresh remote check fails, while non-up-to-date warnings can still be shown as fallback context.
+- Changed repo-copy updates to use `git fetch` + fast-forward only and refuse dirty workspaces instead of overlaying a GitHub archive onto tracked files.
+- Expanded the `Update App` panel with current/latest version, current/latest commit, source kind, status, and last-check details.
+
 ## [2026-04-24]
 
 ### Changed

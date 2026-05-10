@@ -69,7 +69,7 @@ When a `DISM` step fails, the launcher also prints the native exit code, points 
 
 Main-menu option `[4]` shows the live Delivery Optimization state directly in the gray description line and lets you clear the Delivery Optimization cache while safely forcing `DownloadMode = 0 (CdnOnly)` so peer-to-peer sharing stays off.
 
-Main-menu option `[7]` is the launcher-level `Update App` shortcut. It detects whether the tool is running from a git repo, an installed copy, or a portable copy, then dispatches to the sibling `Install.ps1` with the most sensible `InstallerCore` update action automatically.
+Main-menu option `[7]` is the launcher-level `Update App` shortcut. It detects whether the tool is running from a git repo, an installed copy, or a portable copy, then uses the safest update path automatically: git fast-forward for repo copies, or the sibling `Install.ps1` for installed/portable copies.
 
 The main launcher is now `SystemCleanup.ps1`. It prefers **Windows Terminal** when available, but still falls back to a normal elevated PowerShell host if `wt.exe` is missing. In WT sessions, `Full Cleanup` opens in a dedicated split pane and runs through `cmd.exe`, preserving the familiar native `% progress` display for `SFC` and `DISM`.
 
@@ -300,13 +300,14 @@ Selection: 'KB5034441'  ← hide by KB number
 > A main-menu shortcut that reuses the existing InstallerCore-generated `Install.ps1` while the app owns progress, recent output, relaunch, and old-host exit.
 
 - Main menu option `[7]`
-- If the launcher is running from a git working copy, it uses `DownloadLatest` against the current repo folder
+- If the launcher is running from a git working copy, it uses `git fetch` + fast-forward only and refuses dirty workspaces
 - If the launcher is running from an installed copy with `state\install-meta.json`, it uses `UpdateGitHub` for the installed tool
 - If the launcher is running from a portable folder, it falls back to `DownloadLatest`
 - The update runs inside the current app session with a visible `Update App` progress panel
 - Recent output is tailed from `logs\installer.log` so the installer is not a black box
-- Working-copy updates use `DownloadLatest -NoSelfRelaunch`, so the app owns the relaunch instead of spawning a second installer window
-- The gray description line shows the detected updater defaults directly in the main menu, for example `Repo copy • GitHub/master`, `Installed copy • GitHub/master`, or `Installed copy • Local`
+- Non-git working-copy updates use `DownloadLatest -NoSelfRelaunch`, so the app owns the relaunch instead of spawning a second installer window
+- The update status compares both version and Git commit, so a same-version newer commit still appears as an available update instead of a false `Up to date`
+- The gray description line shows the detected updater defaults directly in the main menu, for example `Repo copy • Git/master`, `Installed copy • GitHub/master`, or `Installed copy • Local`
 - The self-update screen shows the default `Installer Mode` plus either `GitHub branch` or `Local source`
 - The choice block is split into clear per-line actions: `Enter` uses shown defaults, `E` opens the normal `Install.ps1` interactive menu, and `ESC` cancels
 - Pressing `ESC` in that self-update choice panel returns directly to the main launcher menu without the extra generic pause prompt
