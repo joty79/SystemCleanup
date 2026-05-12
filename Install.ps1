@@ -1,7 +1,7 @@
 #requires -version 7.0
 [CmdletBinding()]
 param(
-    [ValidateSet('Install', 'Update', 'Uninstall', 'InstallGitHub', 'UpdateGitHub', 'OpenInstallDirectory', 'OpenInstallLogs', 'DownloadLatest')]
+    [ValidateSet('Install', 'Update', 'Uninstall', 'InstallGitHub', 'UpdateGitHub', 'OpenInstallDirectory', 'OpenInstallLogs', 'DownloadLatest', 'RegistryRepair')]
     [string]$Action = 'Install',
     [string]$InstallPath = '',
     [string]$SourcePath = $PSScriptRoot,
@@ -26,7 +26,7 @@ $script:ProfileJson = @'
   "github_repo": "joty79/SystemCleanup",
   "github_ref": "",
   "app_metadata_file": "app-metadata.json",
-  "legacy_root": "D:\\Users\\joty79\\scripts\\dism",
+  "legacy_root": "D:\\Users\\joty79\\scripts\\SystemCleanup",
   "publisher": "joty79",
   "uninstall_key_name": "SystemCleanupContext",
   "uninstall_display_name": "SystemCleanup Context Menu",
@@ -84,45 +84,49 @@ $script:ProfileJson = @'
     "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemCleanup",
     "HKCR\\Directory\\Background\\shell\\SystemCleanup",
     "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
+    "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
     "HKCR\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
+    "HKCR\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
     "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemCleanup",
     "HKCR\\DesktopBackground\\Shell\\SystemCleanup",
     "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
-    "HKCR\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup"
+    "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+    "HKCR\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
+    "HKCR\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup"
   ],
   "registry_values": [
     {
-      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
       "name": "MUIVerb",
       "type": "REG_SZ",
-      "value": "Windows Update CleanUp"
+      "value": "Windows Update Cleanup"
     },
     {
-      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
       "name": "Icon",
       "type": "REG_SZ",
       "value": "imageres.dll,-5323"
     },
     {
-      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup\\Command",
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "type": "REG_SZ",
       "value": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
       "name": "MUIVerb",
       "type": "REG_SZ",
-      "value": "Windows Update CleanUp"
+      "value": "Windows Update Cleanup"
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
       "name": "Icon",
       "type": "REG_SZ",
       "value": "imageres.dll,-5323"
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup\\Command",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "type": "REG_SZ",
       "value": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
@@ -130,22 +134,22 @@ $script:ProfileJson = @'
   ],
   "registry_verify": [
     {
-      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
       "name": "MUIVerb",
-      "expected": "Windows Update CleanUp"
+      "expected": "Windows Update Cleanup"
     },
     {
-      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup\\Command",
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "expected": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
       "name": "MUIVerb",
-      "expected": "Windows Update CleanUp"
+      "expected": "Windows Update Cleanup"
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup\\Command",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "expected": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
     }
@@ -220,6 +224,9 @@ $script:ResolvedSourceDirty = $false
 $script:TempPackageRoots = [System.Collections.Generic.List[string]]::new()
 $script:HasCliArgs = $MyInvocation.BoundParameters.Count -gt 0
 $script:IsWindowsTerminalSession = -not [string]::IsNullOrWhiteSpace($env:WT_SESSION)
+$script:RegistryCleanupNeedsElevation = $false
+$script:RegistryCleanupIssues = [System.Collections.Generic.List[string]]::new()
+$script:ElevatedRegistryRepairSucceeded = $false
 
 if ([string]::IsNullOrWhiteSpace($InstallPath)) { $InstallPath = Join-Path $env:LOCALAPPDATA ([string](Get-P 'install_folder_name' "$($script:ToolName)Context")) }
 if ([string]::IsNullOrWhiteSpace($GitHubRepo)) { $GitHubRepo = [string](Get-P 'github_repo' '') }
@@ -256,6 +263,37 @@ function Confirm([string]$Prompt) {
     return ($response.Trim().ToLowerInvariant() -eq 'y')
 }
 
+function Complete-InstallerRun([int]$ExitCode) {
+    if ($ExitCode -ne 0 -and -not $script:HasCliArgs) {
+        Write-Host ''
+        Write-Host ("Installer failed with exit code {0}." -f $ExitCode) -ForegroundColor Red
+        Write-Host ("Log: {0}" -f $script:InstallerLogPath) -ForegroundColor Yellow
+        Write-Host 'Press Enter to close this window...' -ForegroundColor Gray
+        try { [void](Read-Host) } catch {}
+    }
+    exit $ExitCode
+}
+
+function Test-IsElevated {
+    if (-not $IsWindows) { return $false }
+    try {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+        return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Resolve-PwshPath {
+    $pwshCmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    if ($null -ne $pwshCmd) { return $pwshCmd.Source }
+    $fallback = Join-Path $PSHOME 'pwsh.exe'
+    if (Test-Path -LiteralPath $fallback -PathType Leaf) { return $fallback }
+    throw 'pwsh.exe was not found for elevated relaunch.'
+}
+
 function RegCmd([AllowEmptyString()][string[]]$RegArgs, [switch]$IgnoreNotFound) {
     $out = & reg.exe @RegArgs 2>&1
     if ($LASTEXITCODE -eq 0) { return $out }
@@ -264,12 +302,86 @@ function RegCmd([AllowEmptyString()][string[]]$RegArgs, [switch]$IgnoreNotFound)
     throw "reg.exe failed: reg $($RegArgs -join ' ')`n$text"
 }
 function RegDel([string]$Key) { RegCmd -RegArgs @('delete', $Key, '/f') -IgnoreNotFound | Out-Null }
+
+function Test-RegistryKeyExists([string]$Key) {
+    try {
+        $keySpec = ResolveRegistryKeySpec $Key
+        $registryKey = $null
+        try {
+            $registryKey = $keySpec.Root.OpenSubKey($keySpec.SubKey, $false)
+            return ($null -ne $registryKey)
+        }
+        finally {
+            if ($null -ne $registryKey) { $registryKey.Dispose() }
+        }
+    }
+    catch {
+        return $false
+    }
+}
+function ResolveRegistryKeySpec([string]$Key) {
+    if ([string]::IsNullOrWhiteSpace($Key)) { throw 'Registry key is empty.' }
+
+    $normalizedKey = $Key.Trim()
+    if ($normalizedKey.StartsWith('Registry::', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $normalizedKey = $normalizedKey.Substring('Registry::'.Length)
+    }
+
+    if ($normalizedKey.StartsWith('HKCU\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return [pscustomobject]@{
+            Root = [Microsoft.Win32.Registry]::CurrentUser
+            SubKey = $normalizedKey.Substring(5)
+        }
+    }
+    if ($normalizedKey.StartsWith('HKEY_CURRENT_USER\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return [pscustomobject]@{
+            Root = [Microsoft.Win32.Registry]::CurrentUser
+            SubKey = $normalizedKey.Substring('HKEY_CURRENT_USER\'.Length)
+        }
+    }
+    if ($normalizedKey.StartsWith('HKCR\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return [pscustomobject]@{
+            Root = [Microsoft.Win32.Registry]::ClassesRoot
+            SubKey = $normalizedKey.Substring(5)
+        }
+    }
+    if ($normalizedKey.StartsWith('HKEY_CLASSES_ROOT\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return [pscustomobject]@{
+            Root = [Microsoft.Win32.Registry]::ClassesRoot
+            SubKey = $normalizedKey.Substring('HKEY_CLASSES_ROOT\'.Length)
+        }
+    }
+
+    throw "Unsupported registry root in key: $Key"
+}
+function GetRegistryValueKind([string]$Type) {
+    switch ($Type.ToUpperInvariant()) {
+        'REG_SZ' { return [Microsoft.Win32.RegistryValueKind]::String }
+        'REG_EXPAND_SZ' { return [Microsoft.Win32.RegistryValueKind]::ExpandString }
+        'REG_DWORD' { return [Microsoft.Win32.RegistryValueKind]::DWord }
+        default { throw "Unsupported registry value type: $Type" }
+    }
+}
 function RegAdd([string]$Key, [string]$Name, [string]$Type, [AllowEmptyString()][string]$Value) {
     $safe = if ($Type -eq 'REG_DWORD') { if ([string]::IsNullOrWhiteSpace($Value)) { '0' } else { $Value } } else { $Value }
-    $regArgs = @('add', $Key)
-    if ($Name -eq '(default)') { $regArgs += '/ve' } else { $regArgs += @('/v', $Name) }
-    $regArgs += @('/t', $Type, '/d', $safe, '/f')
-    RegCmd -RegArgs $regArgs | Out-Null
+    $keySpec = ResolveRegistryKeySpec $Key
+    $valueName = if ($Name -eq '(default)') { '' } else { $Name }
+    $valueKind = GetRegistryValueKind $Type
+    $registryKey = $null
+    try {
+        $registryKey = $keySpec.Root.CreateSubKey($keySpec.SubKey)
+        if ($null -eq $registryKey) { throw "Could not create registry key: $Key" }
+
+        if ($valueKind -eq [Microsoft.Win32.RegistryValueKind]::DWord) {
+            $registryKey.SetValue($valueName, [int]$safe, $valueKind)
+        }
+        else {
+            $registryKey.SetValue($valueName, $safe, $valueKind)
+        }
+    }
+    finally {
+        if ($null -ne $registryKey) { $registryKey.Dispose() }
+    }
     if ($Type -in @('REG_SZ', 'REG_EXPAND_SZ') -and $Value -eq '') {
         $actual = RegGet -Key $Key -Name $Name
         if ($null -eq $actual -or $actual -ne '') {
@@ -278,13 +390,23 @@ function RegAdd([string]$Key, [string]$Name, [string]$Type, [AllowEmptyString()]
     }
 }
 function RegGet([string]$Key, [string]$Name) {
-    $q = if ($Name -eq '(default)') { RegCmd -RegArgs @('query', $Key, '/ve') -IgnoreNotFound } else { RegCmd -RegArgs @('query', $Key, '/v', $Name) -IgnoreNotFound }
-    if (-not $q) { return $null }
-    $line = $q | Where-Object { $_ -match 'REG_' -and $_ -match '^\s*(\(Default\)|\S+)\s+REG_' } | Select-Object -First 1
-    if (-not $line) { return $null }
-    $parts = ($line -split '\s{2,}') | Where-Object { $_ -ne '' }
-    if ($parts.Count -ge 3) { return [string]$parts[2] }
-    return ''
+    $keySpec = ResolveRegistryKeySpec $Key
+    $valueName = if ($Name -eq '(default)') { '' } else { $Name }
+    $registryKey = $null
+    try {
+        $registryKey = $keySpec.Root.OpenSubKey($keySpec.SubKey, $false)
+        if ($null -eq $registryKey) { return $null }
+        $valueNames = @($registryKey.GetValueNames())
+        if ($valueName -ne '' -and $valueName -notin $valueNames) { return $null }
+        if ($valueName -eq '' -and '' -notin $valueNames) { return $null }
+
+        $value = $registryKey.GetValue($valueName, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        if ($null -eq $value) { return $null }
+        return [string]$value
+    }
+    finally {
+        if ($null -ne $registryKey) { $registryKey.Dispose() }
+    }
 }
 
 function CleanupRegistry {
@@ -294,7 +416,12 @@ function CleanupRegistry {
         }
         catch {
             $errText = [string]$_.Exception.Message
-            if ($k -like 'HKCR\*' -and $errText -match 'Access is denied') { continue }
+            if ($k -like 'HKCR\*' -and $errText -match 'Access is denied') {
+                $script:RegistryCleanupNeedsElevation = $true
+                $script:RegistryCleanupIssues.Add($k) | Out-Null
+                Log "Protected registry cleanup needs elevation: $k"
+                continue
+            }
             Log "Failed to remove key: $k" 'WARN'
         }
     }
@@ -318,6 +445,65 @@ function VerifyRegistry([string]$InstallRoot) {
         if ($a -ne $e) { $ok = $false; Log "Registry mismatch: $k [$n] expected='$e' actual='$a'" 'WARN' }
     }
     return $ok
+}
+
+function New-EncodedPowerShellCommand {
+    param(
+        [Parameter(Mandatory)]
+        [string]$ScriptPath,
+
+        [Parameter(Mandatory)]
+        [string]$RepairInstallPath
+    )
+
+    $sqScript = $ScriptPath.Replace("'", "''")
+    $sqInstall = $RepairInstallPath.Replace("'", "''")
+    $sqSource = $SourcePath.Replace("'", "''")
+    $sqRepo = $GitHubRepo.Replace("'", "''")
+    $sqRef = $GitHubRef.Replace("'", "''")
+    $command = @"
+& '$sqScript' -Action RegistryRepair -InstallPath '$sqInstall' -SourcePath '$sqSource' -PackageSource Local -GitHubRepo '$sqRepo' -GitHubRef '$sqRef' -Force
+exit `$LASTEXITCODE
+"@
+    return [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+}
+
+function Invoke-ElevatedRegistryRepairIfNeeded([string]$InstallRoot) {
+    if (-not $script:RegistryCleanupNeedsElevation) { return $true }
+    if (Test-IsElevated) { return $true }
+
+    $issueCount = $script:RegistryCleanupIssues.Count
+    $prompt = "Protected legacy context-menu cleanup needs Administrator rights ($issueCount key(s)). Relaunch elevated to finish cleanup?"
+    if (-not (Confirm $prompt)) {
+        Log 'Protected legacy context-menu cleanup was skipped because elevated relaunch was declined.' 'WARN'
+        return $false
+    }
+
+    try {
+        $pwshExe = Resolve-PwshPath
+        $encoded = New-EncodedPowerShellCommand -ScriptPath $PSCommandPath -RepairInstallPath $InstallRoot
+        Log 'Relaunching installer elevated for registry cleanup.'
+        $process = Start-Process -FilePath $pwshExe -ArgumentList @(
+            '-NoProfile',
+            '-ExecutionPolicy', 'Bypass',
+            '-EncodedCommand', $encoded
+        ) -Verb RunAs -Wait -PassThru
+
+        if ($process.ExitCode -eq 0) {
+            $script:ElevatedRegistryRepairSucceeded = $true
+            $script:RegistryCleanupNeedsElevation = $false
+            $script:RegistryCleanupIssues.Clear()
+            Log 'Elevated registry cleanup completed successfully.'
+            return $true
+        }
+
+        Log "Elevated registry cleanup exited with code $($process.ExitCode)." 'WARN'
+        return $false
+    }
+    catch {
+        Log "Elevated registry cleanup failed to start or complete: $($_.Exception.Message)" 'WARN'
+        return $false
+    }
 }
 
 function SetUninstall([string]$InstallRoot) {
@@ -345,6 +531,10 @@ function Get-GitHubApiHeaders {
     }
     return $headers
 }
+function Get-GitHubCloneUrl([string]$Repo) {
+    if ([string]::IsNullOrWhiteSpace($Repo)) { return '' }
+    return "https://github.com/$Repo.git"
+}
 function ResolveGitHubCommit([string]$Repo, [string]$Ref) {
     if ([string]::IsNullOrWhiteSpace($Repo) -or [string]::IsNullOrWhiteSpace($Ref)) { return '' }
 
@@ -364,6 +554,17 @@ function ResolveGitHubCommit([string]$Repo, [string]$Ref) {
         }
     }
     catch {}
+
+    if (Get-Command git.exe -ErrorAction SilentlyContinue) {
+        try {
+            $remoteLine = (& git.exe ls-remote (Get-GitHubCloneUrl $Repo) "refs/heads/$Ref" 2>$null | Select-Object -First 1 | Out-String).Trim()
+            if (-not [string]::IsNullOrWhiteSpace($remoteLine)) {
+                $sha = ($remoteLine -split '\s+')[0]
+                if (-not [string]::IsNullOrWhiteSpace($sha)) { return $sha }
+            }
+        }
+        catch {}
+    }
 
     return ''
 }
@@ -437,6 +638,33 @@ function Get-GitHubRemoteInfo([string]$Repo) {
     }
     catch {}
 
+    if (Get-Command git.exe -ErrorAction SilentlyContinue) {
+        try {
+            $cloneUrl = Get-GitHubCloneUrl $Repo
+            $headInfo = (& git.exe ls-remote --symref $cloneUrl HEAD 2>$null | Out-String).Trim()
+            foreach ($line in @($headInfo -split "`r?`n")) {
+                $match = [regex]::Match($line, '^ref:\s+refs/heads/(?<branch>\S+)\s+HEAD$')
+                if ($match.Success) {
+                    $result.DefaultBranch = NormalizeGitHubRef ([string]$match.Groups['branch'].Value)
+                }
+            }
+
+            $branchInfo = (& git.exe ls-remote --heads $cloneUrl 2>$null | Out-String).Trim()
+            foreach ($line in @($branchInfo -split "`r?`n")) {
+                $match = [regex]::Match($line, 'refs/heads/(?<branch>\S+)$')
+                if ($match.Success) {
+                    $name = NormalizeGitHubRef ([string]$match.Groups['branch'].Value)
+                    if (-not [string]::IsNullOrWhiteSpace($name) -and -not $result.Branches.Contains($name)) {
+                        $result.Branches.Add($name)
+                    }
+                }
+            }
+
+            if ($result.DefaultBranch -or $result.Branches.Count -gt 0) { return [pscustomobject]$result }
+        }
+        catch {}
+    }
+
     return [pscustomobject]$result
 }
 function ResolveGitHubRefAuto {
@@ -447,7 +675,7 @@ function ResolveGitHubRefAuto {
 
     $info = Get-GitHubRemoteInfo -Repo $GitHubRepo
     $preferred = [System.Collections.Generic.List[string]]::new()
-    foreach ($candidate in @($info.DefaultBranch, 'master', [string](Get-P 'github_ref' ''), 'latest')) {
+    foreach ($candidate in @([string](Get-P 'github_ref' ''), $info.DefaultBranch, 'main', 'master', 'latest')) {
         $name = NormalizeGitHubRef $candidate
         if (-not [string]::IsNullOrWhiteSpace($name) -and -not $preferred.Contains($name)) {
             $preferred.Add($name)
@@ -496,13 +724,11 @@ function ResolveSourceRoot {
     if ([string]::IsNullOrWhiteSpace($GitHubRef)) { EnsureGitHubRefResolved }
     if ([string]::IsNullOrWhiteSpace($GitHubRef)) { throw 'GitHubRef could not be resolved for GitHub package source.' }
     $script:ResolvedPackageSource = 'GitHub'
-    $fallbackRoots = @()
-    if (TestPkgRoot $SourcePath) { $fallbackRoots += $SourcePath }
-    if ((Test-Path -LiteralPath $InstallPath) -and (TestPkgRoot $InstallPath)) { $fallbackRoots += $InstallPath }
     $url = if ([string]::IsNullOrWhiteSpace($GitHubZipUrl)) { "https://codeload.github.com/$GitHubRepo/zip/refs/heads/$GitHubRef" } else { $GitHubZipUrl.Trim() }
     $tmp = Join-Path $env:TEMP ("$($script:ToolName)_pkg_" + [guid]::NewGuid().ToString('N'))
     $zip = Join-Path $tmp 'pkg.zip'
     $ext = Join-Path $tmp 'extract'
+    $cloneRoot = Join-Path $tmp 'git'
     EnsureDir $tmp; EnsureDir $ext
     $script:TempPackageRoots.Add($tmp) | Out-Null
     Log "Downloading package: $url"
@@ -536,11 +762,24 @@ function ResolveSourceRoot {
             catch {}
         }
         if (-not $downloaded) {
-            if ($fallbackRoots.Count -gt 0) {
-                Log "GitHub fetch failed. Falling back to local package source: $($fallbackRoots[0])" 'WARN'
-                $script:ResolvedPackageSource = 'Local'
-                Set-LocalSourceGitMetadata -Root $fallbackRoots[0]
-                return $fallbackRoots[0]
+            if (Get-Command git.exe -ErrorAction SilentlyContinue) {
+                try {
+                    Log 'GitHub archive fetch failed; trying git clone fallback with local git credentials...'
+                    & git.exe clone --quiet --depth 1 --branch $GitHubRef (Get-GitHubCloneUrl $GitHubRepo) $cloneRoot 2>$null
+                    if ($LASTEXITCODE -eq 0) {
+                        $candidateRoots = @($cloneRoot) + @(Get-ChildItem -LiteralPath $cloneRoot -Directory -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+                        foreach ($candidateRoot in $candidateRoots) {
+                            if (TestPkgRoot $candidateRoot) {
+                                $commit = (& git.exe -C $cloneRoot rev-parse HEAD 2>$null | Out-String).Trim()
+                                if (-not [string]::IsNullOrWhiteSpace($commit)) { $script:ResolvedGitHubCommit = $commit }
+                                $script:ResolvedSourceGitBranch = $GitHubRef
+                                $script:ResolvedSourceDirty = $false
+                                return $candidateRoot
+                            }
+                        }
+                    }
+                }
+                catch {}
             }
             throw
         }
@@ -549,22 +788,10 @@ function ResolveSourceRoot {
         Expand-Archive -Path $zip -DestinationPath $ext -Force
     }
     catch {
-        if ($fallbackRoots.Count -gt 0) {
-            Log "GitHub extract failed. Falling back to local package source: $($fallbackRoots[0])" 'WARN'
-            $script:ResolvedPackageSource = 'Local'
-            Set-LocalSourceGitMetadata -Root $fallbackRoots[0]
-            return $fallbackRoots[0]
-        }
         throw
     }
     $roots = @(Get-ChildItem -LiteralPath $ext -Directory -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
     foreach ($r in $roots) { if (TestPkgRoot $r) { return $r } }
-    if ($fallbackRoots.Count -gt 0) {
-        Log "Downloaded package missing required files. Falling back to local package source: $($fallbackRoots[0])" 'WARN'
-        $script:ResolvedPackageSource = 'Local'
-        Set-LocalSourceGitMetadata -Root $fallbackRoots[0]
-        return $fallbackRoots[0]
-    }
     throw 'Downloaded package does not contain required files.'
 }
 
@@ -734,10 +961,38 @@ function RunInstallOrUpdate([ValidateSet('Install', 'Update')] [string]$Mode) {
     $regOk = VerifyRegistry -InstallRoot $InstallPath
     SetUninstall -InstallRoot $InstallPath
     SaveMeta -InstallRoot $InstallPath -Mode $Mode
-    RestartExplorer
-    if ($script:Warnings.Count -gt 0 -or -not $coreOk -or -not $regOk) { Write-Host "$Mode completed with warnings." -ForegroundColor Yellow; return 2 }
+    $cleanupOk = Invoke-ElevatedRegistryRepairIfNeeded -InstallRoot $InstallPath
+    if (-not $script:ElevatedRegistryRepairSucceeded) { RestartExplorer }
+    if ($script:Warnings.Count -gt 0 -or -not $coreOk -or -not $regOk -or -not $cleanupOk) { Write-Host "$Mode completed with warnings." -ForegroundColor Yellow; return 2 }
     Write-Host "$Mode completed successfully." -ForegroundColor Green
     return 0
+}
+
+function RunRegistryRepair {
+    Log "Starting elevated registry repair for $InstallPath"
+    if (-not (Get-Command reg.exe -ErrorAction SilentlyContinue)) {
+        Log 'Missing required command: reg.exe' 'ERROR'
+        return 1
+    }
+
+    try {
+        WriteRegistry -InstallRoot $InstallPath
+        $regOk = VerifyRegistry -InstallRoot $InstallPath
+        if ($script:RegistryCleanupNeedsElevation -and (Test-IsElevated)) {
+            Log 'Some protected registry cleanup keys still could not be removed even after elevation.' 'WARN'
+        }
+        RestartExplorer
+        if ($script:Warnings.Count -gt 0 -or -not $regOk) {
+            Write-Host 'Registry repair completed with warnings.' -ForegroundColor Yellow
+            return 2
+        }
+        Write-Host 'Registry repair completed successfully.' -ForegroundColor Green
+        return 0
+    }
+    catch {
+        Log "Registry repair failed: $($_.Exception.Message)" 'ERROR'
+        return 1
+    }
 }
 
 function RunUninstall {
@@ -1001,11 +1256,12 @@ function PreparePackageSource([ValidateSet('Install', 'Update')] [string]$Mode) 
 
 if (-not $script:HasCliArgs) { $menuAction = ShowMenu; if ($menuAction -eq 'Exit') { exit 0 }; $Action = $menuAction }
 switch ($Action) {
-    'Install' { PreparePackageSource -Mode 'Install'; if (-not (Confirm "Install $($script:DisplayName) to '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Install') }
-    'InstallGitHub' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Install $($script:DisplayName) to '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Install') }
-    'Update' { PreparePackageSource -Mode 'Update'; if (-not (Confirm "Update existing $($script:DisplayName) at '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Update') }
-    'UpdateGitHub' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Update existing $($script:DisplayName) at '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunInstallOrUpdate -Mode 'Update') }
-    'Uninstall' { if (-not (Confirm "Uninstall $($script:DisplayName) from '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; exit (RunUninstall) }
+    'Install' { PreparePackageSource -Mode 'Install'; if (-not (Confirm "Install $($script:DisplayName) to '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; Complete-InstallerRun (RunInstallOrUpdate -Mode 'Install') }
+    'InstallGitHub' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Install $($script:DisplayName) to '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; Complete-InstallerRun (RunInstallOrUpdate -Mode 'Install') }
+    'Update' { PreparePackageSource -Mode 'Update'; if (-not (Confirm "Update existing $($script:DisplayName) at '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; Complete-InstallerRun (RunInstallOrUpdate -Mode 'Update') }
+    'UpdateGitHub' { $PackageSource = 'GitHub'; EnsureGitHubRefResolved; Write-Host ("Using GitHub ref: {0}" -f $GitHubRef) -ForegroundColor DarkCyan; if (-not (Confirm "Update existing $($script:DisplayName) at '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; Complete-InstallerRun (RunInstallOrUpdate -Mode 'Update') }
+    'Uninstall' { if (-not (Confirm "Uninstall $($script:DisplayName) from '$InstallPath'?")) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }; Complete-InstallerRun (RunUninstall) }
+    'RegistryRepair' { Complete-InstallerRun (RunRegistryRepair) }
     'DownloadLatest' {
         $downloadPrompt = if ($NoSelfRelaunch) {
             "Download latest $($script:DisplayName) into '$PSScriptRoot'?"
@@ -1014,7 +1270,7 @@ switch ($Action) {
             "Download latest $($script:DisplayName) into '$PSScriptRoot' and relaunch the updated installer?"
         }
         if (-not (Confirm $downloadPrompt)) { Write-Host 'Cancelled.' -ForegroundColor Yellow; exit 0 }
-        exit (RunDownloadLatest)
+        Complete-InstallerRun (RunDownloadLatest)
     }
     'OpenInstallDirectory' { if (-not (Test-Path -LiteralPath $InstallPath)) { Write-Host ("Install directory not found: {0}" -f $InstallPath) -ForegroundColor Yellow; exit 1 }; Start-Process explorer.exe -ArgumentList $InstallPath; exit 0 }
     'OpenInstallLogs' { $logFile = Join-Path $InstallPath 'logs\\installer.log'; $logDir = Split-Path -Path $logFile -Parent; EnsureDir $logDir; if (Test-Path -LiteralPath $logFile) { Start-Process notepad.exe -ArgumentList $logFile } else { Start-Process explorer.exe -ArgumentList $logDir }; exit 0 }
