@@ -502,3 +502,12 @@
 - Guardrail/rule: Any user-facing update behavior change must bump the canonical `app-metadata.json` version in the same change set.
 - Files affected: `SystemCleanup.ps1`, `ManageUpdates.ps1`, `README.md`, `CHANGELOG.md`, `PROJECT_RULES.md`.
 - Validation/tests run: Parser validation for `SystemCleanup.ps1`, `ManageUpdates.ps1`, `Install.ps1`, and `CleanInFlight.ps1`; non-interactive repo and installed status probes; git fast-forward dirty-workspace refusal probe; local-source `Install.ps1 -Action Update -PackageSource Local -Force -NoExplorerRestart`; installed file hash readback; installed parser validation; registry command readback.
+
+### Entry - 2026-05-14 (Shared System Tools Windows category)
+
+- Date: 2026-05-14
+- Problem: The shared category formerly named `Apps & Windows` was renamed to `Windows`.
+- Root cause: The visible menu needed a shorter and broader category name for Windows/app utilities.
+- Guardrail/rule: `SystemCleanup` remains child-only under `SystemTools\shell\Windows\shell\SystemCleanup` for folder and desktop background branches. Keep cleanup for old `AppsWindows` child paths during migration.
+- Files affected: `Install.ps1`, `app-metadata.json`, `CHANGELOG.md`, `PROJECT_RULES.md`, `D:\Users\joty79\scripts\InstallerCore\profiles\SystemCleanup.json`.
+- Validation/tests run: Pending parser validation, local-source install, and HKCU registry readback after regeneration.

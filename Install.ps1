@@ -84,49 +84,53 @@ $script:ProfileJson = @'
     "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemCleanup",
     "HKCR\\Directory\\Background\\shell\\SystemCleanup",
     "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
-    "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+    "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
     "HKCR\\Directory\\Background\\shell\\SystemTools\\shell\\SystemCleanup",
-    "HKCR\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+    "HKCR\\Directory\\Background\\shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
     "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemCleanup",
     "HKCR\\DesktopBackground\\Shell\\SystemCleanup",
     "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
-    "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+    "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
     "HKCR\\DesktopBackground\\Shell\\SystemTools\\shell\\SystemCleanup",
+    "HKCR\\DesktopBackground\\Shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
+    "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+    "HKCR\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+    "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
     "HKCR\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup"
   ],
   "registry_values": [
     {
-      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
       "name": "MUIVerb",
       "type": "REG_SZ",
       "value": "Windows Update Cleanup"
     },
     {
-      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
       "name": "Icon",
       "type": "REG_SZ",
       "value": "imageres.dll,-5323"
     },
     {
-      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup\\Command",
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "type": "REG_SZ",
       "value": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
       "name": "MUIVerb",
       "type": "REG_SZ",
       "value": "Windows Update Cleanup"
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
       "name": "Icon",
       "type": "REG_SZ",
       "value": "imageres.dll,-5323"
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup\\Command",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "type": "REG_SZ",
       "value": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
@@ -134,22 +138,22 @@ $script:ProfileJson = @'
   ],
   "registry_verify": [
     {
-      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
       "name": "MUIVerb",
       "expected": "Windows Update Cleanup"
     },
     {
-      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup\\Command",
+      "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "expected": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
       "name": "MUIVerb",
       "expected": "Windows Update Cleanup"
     },
     {
-      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\AppsWindows\\shell\\SystemCleanup\\Command",
+      "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup\\Command",
       "name": "(default)",
       "expected": "wscript.exe \"{InstallRoot}\\Launch-SystemCleanup.vbs\""
     }
@@ -820,6 +824,8 @@ function Deploy([string]$SourceRoot, [string]$InstallRoot) {
 
 function PatchWrappers([string]$InstallRoot) {
     foreach ($p in @((Get-P 'wrapper_patches' @()))) {
+        if ($null -eq $p) { continue }
+        if (-not ($p.PSObject.Properties['file']) -or -not ($p.PSObject.Properties['regex'])) { continue }
         $fileRel = [string]$p.file; $regex = [string]$p.regex; $repRaw = [string]$p.replacement
         if ([string]::IsNullOrWhiteSpace($fileRel) -or [string]::IsNullOrWhiteSpace($regex)) { continue }
         $target = Join-Path $InstallRoot $fileRel

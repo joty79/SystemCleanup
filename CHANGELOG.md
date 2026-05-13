@@ -2,6 +2,13 @@
 
 All notable user-facing changes for `SystemCleanup` are recorded here.
 
+## [2026-05-14]
+
+### Changed
+
+- Bumped the app metadata version to `1.0.2` for the shared System Tools menu correction.
+- Regenerated `Install.ps1` from `InstallerCore` so Windows Update Cleanup installs under `System Tools > Windows`.
+
 ## [2026-05-11]
 
 ### Changed
