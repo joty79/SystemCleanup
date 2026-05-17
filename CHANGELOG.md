@@ -2,6 +2,12 @@
 
 All notable user-facing changes for `SystemCleanup` are recorded here.
 
+## [2026-05-17]
+
+### Changed
+
+- Added `assets\icons\SystemCleanupClean.ico` and pointed the `SystemTools > Windows > Windows Update Cleanup` registry icon to that new filename so Explorer does not keep showing the old cached bitmap from `SystemCleanup.ico`.
+
 ## [2026-05-14]
 
 ### Changed

@@ -49,7 +49,9 @@ $script:ProfileJson = @'
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
     "ManageUpdates.ps1",
-    "SystemCleanup.reg"
+    "SystemCleanup.reg",
+    "assets\\icons\\SystemCleanup.ico",
+    "assets\\icons\\SystemCleanupClean.ico"
   ],
   "deploy_entries": [
     "Install.ps1",
@@ -60,7 +62,9 @@ $script:ProfileJson = @'
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
     "ManageUpdates.ps1",
-    "SystemCleanup.reg"
+    "SystemCleanup.reg",
+    "assets\\icons\\SystemCleanup.ico",
+    "assets\\icons\\SystemCleanupClean.ico"
   ],
   "preserve_existing_entries": [],
   "verify_core_files": [
@@ -71,7 +75,8 @@ $script:ProfileJson = @'
     "FullCleanup.cmd",
     "SystemCleanup.cmd",
     "CleanInFlight.ps1",
-    "ManageUpdates.ps1"
+    "ManageUpdates.ps1",
+    "assets\\icons\\SystemCleanupClean.ico"
   ],
   "migration_copy_entries": [
     "logs",
@@ -109,7 +114,7 @@ $script:ProfileJson = @'
       "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
       "name": "Icon",
       "type": "REG_SZ",
-      "value": "imageres.dll,-5323"
+      "value": "{InstallRoot}\\assets\\icons\\SystemCleanupClean.ico"
     },
     {
       "key": "HKCU\\Software\\Classes\\Directory\\Background\\shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup\\Command",
@@ -127,7 +132,7 @@ $script:ProfileJson = @'
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup",
       "name": "Icon",
       "type": "REG_SZ",
-      "value": "imageres.dll,-5323"
+      "value": "{InstallRoot}\\assets\\icons\\SystemCleanupClean.ico"
     },
     {
       "key": "HKCU\\Software\\Classes\\DesktopBackground\\Shell\\SystemTools\\shell\\Windows\\shell\\SystemCleanup\\Command",

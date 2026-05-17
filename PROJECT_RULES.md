@@ -511,3 +511,12 @@
 - Guardrail/rule: `SystemCleanup` remains child-only under `SystemTools\shell\Windows\shell\SystemCleanup` for folder and desktop background branches. Keep cleanup for old `AppsWindows` child paths during migration.
 - Files affected: `Install.ps1`, `app-metadata.json`, `CHANGELOG.md`, `PROJECT_RULES.md`, `D:\Users\joty79\scripts\InstallerCore\profiles\SystemCleanup.json`.
 - Validation/tests run: Pending parser validation, local-source install, and HKCU registry readback after regeneration.
+
+### Entry - 2026-05-17 (Versioned context-menu icon path)
+
+- Date: 2026-05-17
+- Problem: Replacing `SystemCleanup.ico` with a transparent-background icon still showed the old white-background bitmap in the Explorer context menu.
+- Root cause: Explorer cached the context-menu icon by path/filename, so changing the bytes behind the same `SystemCleanup.ico` path did not force a visible refresh.
+- Guardrail/rule: When a context-menu `.ico` changes visually but keeps rendering old artwork, point the registry to a new icon filename. Current SystemTools integration uses `assets\icons\SystemCleanupClean.ico`.
+- Files affected: `assets\icons\SystemCleanupClean.ico`, `Install.ps1`, `CHANGELOG.md`, `PROJECT_RULES.md`, `D:\Users\joty79\scripts\InstallerCore\profiles\SystemCleanup.json`.
+- Validation/tests run: Parser validation passed for regenerated `Install.ps1`; profile JSON validation passed; local-source update completed; registry readback confirmed `Directory\Background` and `DesktopBackground` SystemTools entries point to installed `SystemCleanupClean.ico`; Explorer restarted.
