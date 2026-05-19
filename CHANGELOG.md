@@ -8,6 +8,7 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 
 - Bumped the app metadata version to `1.0.3` for the PowerShell UI stretch fix.
 - Updated the PowerShell launcher, confirmation screens, Windows Update Manager submenu, update panels, and cleanup sub-actions to calculate width from the effective console pane and cap bordered headers/menu text, so the UI no longer stretches past narrow Windows Terminal split panes.
+- Reworked submenu rendering to follow the working `SystemToolsManager.ps1` pattern: RawUI-based width, WT synchronized header frames, capped boxed header rows, `Clear-Host`, and trailing `ESC[J` cleanup.
 - Added repo-level line-ending policy so PowerShell/docs/json stay LF while Windows launcher/integration files stay CRLF.
 
 ## [2026-05-17]

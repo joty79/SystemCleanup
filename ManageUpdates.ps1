@@ -130,12 +130,14 @@ function Get-SystemCleanupUpdateDetails {
 
 function Get-UiWidth {
     try {
-        $rawWidth = [Math]::Max(40, $Host.UI.RawUI.WindowSize.Width - 2)
-        $consoleWidth = [Math]::Max(40, [Console]::WindowWidth - 2)
-        return [Math]::Min(96, [Math]::Min($rawWidth, $consoleWidth))
+        $windowWidth = [int]$Host.UI.RawUI.WindowSize.Width
+        if ($windowWidth -le 0) {
+            return 80
+        }
+        return [Math]::Max(40, [Math]::Min(100, $windowWidth - 2))
     }
     catch {
-        return 88
+        return 80
     }
 }
 
@@ -153,11 +155,15 @@ function Get-UiText {
         return $Text
     }
 
+    if ($MaxLength -eq 1) {
+        return $Text.Substring(0, 1)
+    }
+
     if ($MaxLength -le 3) {
         return $Text.Substring(0, $MaxLength)
     }
 
-    return ($Text.Substring(0, $MaxLength - 3) + '...')
+    return ($Text.Substring(0, $MaxLength - 1) + '~')
 }
 
 function Write-BorderedRow {
@@ -210,6 +216,14 @@ function Write-UiRule {
     Write-Host "$prefix$($script:Ui.Dim)$line$($script:Ui.Reset)"
 }
 
+function Clear-UiScreen {
+    try {
+        Clear-Host
+    }
+    catch {
+    }
+}
+
 function New-UiShortcutSegment {
     param(
         [Parameter(Mandatory)][string]$Text,
@@ -249,20 +263,28 @@ function Show-SystemCleanupHeader {
         [AllowEmptyString()][string]$SectionSubtitle = ''
     )
 
-    Clear-Host
+    try { [Console]::Write("$($script:E)[?2026h") } catch {}
+    Clear-UiScreen
     $width = Get-UiWidth
+    $innerWidth = [Math]::Max(1, $width - 2)
 
     $border = [string]::new([char]0x2550, ($width - 2))
     $titleText = " $($script:AppName) v$($script:AppVersion)"
     $subtitleText = ' Repair + Update + Cache Cleanup'
     $updateStatus = Get-SystemCleanupUpdateLabel
     $updateText = " Update: $($updateStatus.Label)"
+    $titleText = Get-UiText -Text $titleText -MaxLength $innerWidth
+    $subtitleText = Get-UiText -Text $subtitleText -MaxLength $innerWidth
+    $updateText = Get-UiText -Text $updateText -MaxLength $innerWidth
+    $titlePad = [Math]::Max(0, $innerWidth - $titleText.Length)
+    $subtitlePad = [Math]::Max(0, $innerWidth - $subtitleText.Length)
+    $updatePad = [Math]::Max(0, $innerWidth - $updateText.Length)
 
     Write-Host ''
     Write-Host "$($script:Ui.H1)$([char]0x2554)$border$([char]0x2557)$($script:Ui.Reset)"
-    Write-BorderedRow -Text $titleText -Color $script:Ui.White -Width $width -Bold
-    Write-BorderedRow -Text $subtitleText -Color $script:Ui.Dim -Width $width
-    Write-BorderedRow -Text $updateText -Color $updateStatus.Color -Width $width
+    Write-Host "$($script:Ui.H1)$([char]0x2551)$($script:Ui.Bold)$($script:Ui.White)$titleText$($script:Ui.Reset)$(' ' * $titlePad)$($script:Ui.H1)$([char]0x2551)$($script:Ui.Reset)"
+    Write-Host "$($script:Ui.H1)$([char]0x2551)$($script:Ui.Dim)$subtitleText$($script:Ui.Reset)$(' ' * $subtitlePad)$($script:Ui.H1)$([char]0x2551)$($script:Ui.Reset)"
+    Write-Host "$($script:Ui.H1)$([char]0x2551)$($updateStatus.Color)$updateText$($script:Ui.Reset)$(' ' * $updatePad)$($script:Ui.H1)$([char]0x2551)$($script:Ui.Reset)"
     Write-Host "$($script:Ui.H1)$([char]0x255A)$border$([char]0x255D)$($script:Ui.Reset)"
     Write-Host ''
     $sectionPrefix = " $([char]0x25C6) $SectionTitle "
@@ -272,6 +294,8 @@ function Show-SystemCleanupHeader {
         Write-UiTextLine -Text $SectionSubtitle -Color $script:Ui.Dim
     }
     Write-Host ''
+    Write-Host "$($script:E)[J" -NoNewline
+    try { [Console]::Write("$($script:E)[?2026l") } catch {}
 }
 
 Initialize-SystemCleanupMetadata

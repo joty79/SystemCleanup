@@ -915,13 +915,14 @@ function Clear-ConsoleInputBuffer {
 
 function Get-UiWidth {
     try {
-        $rawWidth = [Math]::Max(40, $Host.UI.RawUI.WindowSize.Width - 2)
-        $consoleWidth = [Math]::Max(40, [Console]::WindowWidth - 2)
-        $hostWidth = [Math]::Min($rawWidth, $consoleWidth)
-        return [Math]::Min(96, $hostWidth)
+        $windowWidth = [int]$Host.UI.RawUI.WindowSize.Width
+        if ($windowWidth -le 0) {
+            return 80
+        }
+        return [Math]::Max(40, [Math]::Min(100, $windowWidth - 2))
     }
     catch {
-        return 88
+        return 80
     }
 }
 
@@ -939,11 +940,15 @@ function Get-UiText {
         return $Text
     }
 
+    if ($MaxLength -eq 1) {
+        return $Text.Substring(0, 1)
+    }
+
     if ($MaxLength -le 3) {
         return $Text.Substring(0, $MaxLength)
     }
 
-    return ($Text.Substring(0, $MaxLength - 3) + '...')
+    return ($Text.Substring(0, $MaxLength - 1) + '~')
 }
 
 function Write-BorderedRow {
@@ -973,6 +978,14 @@ function Write-UiTextLine {
     $maxTextLength = [Math]::Max(1, $Width - $Prefix.Length - 1)
     $line = Get-UiText -Text $Text -MaxLength $maxTextLength
     Write-Host "$Prefix$Color$line$($script:C.Reset)$($script:C.EraseLn)"
+}
+
+function Clear-UiScreen {
+    try {
+        Clear-Host
+    }
+    catch {
+    }
 }
 
 function New-ShortcutSegment {
@@ -1088,17 +1101,24 @@ function Test-WindowResized {
 
 function Write-Banner {
     $width = Get-UiWidth
+    $innerWidth = [Math]::Max(1, $width - 2)
     $border = [string]::new([char]0x2550, ($width - 2))
     $titleText = " $($script:AppName) v$($script:AppVersion)"
     $subtitleText = ' Repair + Update + Cache Cleanup'
     $updateStatus = Get-AppUpdateStatusPresentation
     $updateText = " Update: $($updateStatus.Label)"
+    $titleText = Get-UiText -Text $titleText -MaxLength $innerWidth
+    $subtitleText = Get-UiText -Text $subtitleText -MaxLength $innerWidth
+    $updateText = Get-UiText -Text $updateText -MaxLength $innerWidth
+    $titlePad = [Math]::Max(0, $innerWidth - $titleText.Length)
+    $subtitlePad = [Math]::Max(0, $innerWidth - $subtitleText.Length)
+    $updatePad = [Math]::Max(0, $innerWidth - $updateText.Length)
 
     Write-Host ''
     Write-Host "$($script:C.H1)$([char]0x2554)$border$([char]0x2557)$($script:C.Reset)"
-    Write-BorderedRow -Text $titleText -Color $script:C.White -Width $width -Bold
-    Write-BorderedRow -Text $subtitleText -Color $script:C.Dim -Width $width
-    Write-BorderedRow -Text $updateText -Color $updateStatus.Color -Width $width
+    Write-Host "$($script:C.H1)$([char]0x2551)$($script:C.Bold)$($script:C.White)$titleText$($script:C.Reset)$(' ' * $titlePad)$($script:C.H1)$([char]0x2551)$($script:C.Reset)"
+    Write-Host "$($script:C.H1)$([char]0x2551)$($script:C.Dim)$subtitleText$($script:C.Reset)$(' ' * $subtitlePad)$($script:C.H1)$([char]0x2551)$($script:C.Reset)"
+    Write-Host "$($script:C.H1)$([char]0x2551)$($updateStatus.Color)$updateText$($script:C.Reset)$(' ' * $updatePad)$($script:C.H1)$([char]0x2551)$($script:C.Reset)"
     Write-Host "$($script:C.H1)$([char]0x255A)$border$([char]0x255D)$($script:C.Reset)"
     Write-Host ''
 }
@@ -1119,18 +1139,21 @@ function Show-SubmenuHeader {
         [AllowEmptyString()][string]$Subtitle = ''
     )
 
+    Lock-ViewportToWindow
+    Begin-SyncRender
     try {
-        Clear-Host
+        Clear-UiScreen
+        Write-Banner
+        Write-Section $Title
+        if (-not [string]::IsNullOrWhiteSpace($Subtitle)) {
+            Write-UiTextLine -Text $Subtitle -Prefix '  ' -Color $script:C.Dim
+        }
+        Write-Host ''
+        Write-Host "$($script:E)[J" -NoNewline
     }
-    catch {
+    finally {
+        End-SyncRender
     }
-
-    Write-Banner
-    Write-Section $Title
-    if (-not [string]::IsNullOrWhiteSpace($Subtitle)) {
-        Write-Host "  $($script:C.Dim)$Subtitle$($script:C.Reset)"
-    }
-    Write-Host ''
 }
 
 function Request-LauncherExit {
@@ -1404,7 +1427,7 @@ function Invoke-MainMenu {
         Begin-SyncRender
         try {
             try {
-                Clear-Host
+                Clear-UiScreen
             }
             catch {
             }
@@ -1788,7 +1811,7 @@ function Show-DetailedServicingLogs {
 }
 
 function Open-WindowsUpdateManager {
-    Clear-Host
+    Clear-UiScreen
     & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action Menu -SilentCaller
 }
 
@@ -1806,17 +1829,17 @@ while ($true) {
 
     switch -Regex ($choice) {
         '^1$' {
-            Clear-Host
+            Clear-UiScreen
             [void](Invoke-FullCleanup)
             continue
         }
         '^2$' {
-            Clear-Host
+            Clear-UiScreen
             [void](Invoke-InFlightOnly)
             continue
         }
         '^3$' {
-            Clear-Host
+            Clear-UiScreen
             $liveCleanupResult = & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action LiveCleanup -SilentCaller
             if ($liveCleanupResult -ne $script:SkipReturnToMenuToken) {
                 $script:CachedLiveDownloadCacheLine = Get-LiveDownloadCacheStatusLine
@@ -1825,7 +1848,7 @@ while ($true) {
             continue
         }
         '^4$' {
-            Clear-Host
+            Clear-UiScreen
             $deliveryOptimizationResult = & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DeliveryOptimizationCleanup -SilentCaller
             if ($deliveryOptimizationResult -ne $script:SkipReturnToMenuToken) {
                 $script:CachedDeliveryOptimizationLine = Get-DeliveryOptimizationStatusLine
@@ -1834,17 +1857,17 @@ while ($true) {
             continue
         }
         '^5$' {
-            Clear-Host
+            Clear-UiScreen
             [void](Open-WindowsUpdateManager)
             continue
         }
         '^6$' {
-            Clear-Host
+            Clear-UiScreen
             [void](Show-DetailedServicingLogs)
             continue
         }
         '^7$' {
-            Clear-Host
+            Clear-UiScreen
             $toolSelfUpdateResult = & (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action ToolSelfUpdate -SilentCaller
             if ($toolSelfUpdateResult -eq $script:RelaunchAndExitToken) {
                 Request-LauncherExit

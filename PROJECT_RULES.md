@@ -525,7 +525,7 @@
 
 - Date: 2026-05-19
 - Problem: The PowerShell launcher/submenus could stretch past the visible pane in Windows Terminal split views, especially on confirmation panels and `ManageUpdates.ps1` sub-action screens.
-- Root cause: Header/layout width used host-reported width without also considering `[Console]::WindowWidth`, and bordered rows/panel text did not consistently truncate to the effective content cell.
-- Guardrail/rule: For `SystemCleanup.ps1` and embedded `ManageUpdates.ps1` panels/submenus, calculate UI width from the minimum of RawUI and `[Console]::WindowWidth`, cap the width, and render bordered rows/menu text/status lines through shared truncation/padding helpers instead of hand-tuned `PadRight` math. Keep the submenu as a single-key menu; do not add arrow navigation just to fix stretching.
+- Root cause: Header/layout rendering had drifted from the working `SystemToolsManager.ps1` TUI pattern, and mixed width sources plus ad hoc clears could leave stale or overwide rows during menu-to-submenu transitions.
+- Guardrail/rule: For `SystemCleanup.ps1` and embedded `ManageUpdates.ps1` panels/submenus, follow the working `SystemToolsManager.ps1` UI pattern: RawUI-based width, WT synchronized frame rendering, capped boxed header rows, `Clear-Host`, and trailing `ESC[J` cleanup. Keep the submenu as a single-key menu; do not add arrow navigation just to fix stretching.
 - Files affected: `.gitattributes`, `SystemCleanup.ps1`, `ManageUpdates.ps1`, `app-metadata.json`, `CHANGELOG.md`, `PROJECT_RULES.md`.
 - Validation/tests run: Parser validation passed for `SystemCleanup.ps1`, `ManageUpdates.ps1`, `Install.ps1`, and `CleanInFlight.ps1`; non-admin status probes passed for `ManageUpdates.ps1 -Action ToolSelfUpdateStatus` and `-Action LiveCleanupStatus`; `git diff --check` passed; `git ls-files --eol` confirmed LF policy for PowerShell/docs/json and CRLF policy for `.cmd`/`.reg`/`.vbs`.
