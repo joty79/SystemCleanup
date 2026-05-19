@@ -2,6 +2,14 @@
 
 All notable user-facing changes for `SystemCleanup` are recorded here.
 
+## [2026-05-19]
+
+### Changed
+
+- Bumped the app metadata version to `1.0.3` for the PowerShell UI stretch fix.
+- Updated the PowerShell launcher, confirmation screens, Windows Update Manager submenu, update panels, and cleanup sub-actions to calculate width from the effective console pane and cap bordered headers/menu text, so the UI no longer stretches past narrow Windows Terminal split panes.
+- Added repo-level line-ending policy so PowerShell/docs/json stay LF while Windows launcher/integration files stay CRLF.
+
 ## [2026-05-17]
 
 ### Changed
@@ -120,4 +128,3 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 - Improved the `Windows Update Cleanup` debug log so external-`cmd` runs now distinguish the `cmd` wrapper PID from the real `cleanmgr` child process and log newly observed `cleanmgr` PIDs explicitly.
 - Reworked `Windows Update Cleanup` on the `wt` branch again so it now launches `cleanmgr` directly, auto-activates the Disk Cleanup GUI window when needed, and tail-waits detached child `cleanmgr` processes instead of relying on the earlier external-`cmd` fallback.
 - Updated the `Windows Update Manager` menu so option `[6] Clean Stale Backup Folders` shows a live `.old_*` folder count/size summary instead of a generic static description.
-

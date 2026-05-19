@@ -11,7 +11,7 @@ param(
 $script:SkipReturnToMenuToken = '__SYSTEMCLEANUP_SKIP_RETURN_TO_MENU__'
 $script:RelaunchAndExitToken = '__SYSTEMCLEANUP_RELAUNCH_AND_EXIT__'
 $script:AppName = 'SystemCleanup'
-$script:AppVersion = '1.0.1'
+$script:AppVersion = '1.0.3'
 $script:AppMetadataPath = Join-Path $PSScriptRoot 'app-metadata.json'
 $script:AppUpdateStatusCachePath = Join-Path $PSScriptRoot 'state\app-update-status.json'
 $script:E = [char]27
@@ -128,6 +128,121 @@ function Get-SystemCleanupUpdateDetails {
     return [pscustomobject]$details
 }
 
+function Get-UiWidth {
+    try {
+        $rawWidth = [Math]::Max(40, $Host.UI.RawUI.WindowSize.Width - 2)
+        $consoleWidth = [Math]::Max(40, [Console]::WindowWidth - 2)
+        return [Math]::Min(96, [Math]::Min($rawWidth, $consoleWidth))
+    }
+    catch {
+        return 88
+    }
+}
+
+function Get-UiText {
+    param(
+        [AllowEmptyString()][string]$Text,
+        [int]$MaxLength
+    )
+
+    if ([string]::IsNullOrEmpty($Text) -or $MaxLength -le 0) {
+        return ''
+    }
+
+    if ($Text.Length -le $MaxLength) {
+        return $Text
+    }
+
+    if ($MaxLength -le 3) {
+        return $Text.Substring(0, $MaxLength)
+    }
+
+    return ($Text.Substring(0, $MaxLength - 3) + '...')
+}
+
+function Write-BorderedRow {
+    param(
+        [AllowEmptyString()][string]$Text,
+        [string]$Color = $script:Ui.White,
+        [int]$Width = (Get-UiWidth),
+        [switch]$Bold
+    )
+
+    $contentWidth = [Math]::Max(1, $Width - 2)
+    $cell = Get-UiText -Text $Text -MaxLength $contentWidth
+    $padding = ' ' * [Math]::Max(0, $contentWidth - $cell.Length)
+    $boldPrefix = if ($Bold) { $script:Ui.Bold } else { '' }
+    Write-Host "$($script:Ui.H1)$([char]0x2551)$boldPrefix$Color$cell$($script:Ui.Reset)$padding$($script:Ui.H1)$([char]0x2551)$($script:Ui.Reset)"
+}
+
+function Write-UiTextLine {
+    param(
+        [AllowEmptyString()][string]$Text,
+        [string]$Prefix = '  ',
+        [string]$Color = $script:Ui.Dim,
+        [int]$Width = (Get-UiWidth)
+    )
+
+    $line = Get-UiText -Text $Text -MaxLength ([Math]::Max(1, $Width - $Prefix.Length - 1))
+    Write-Host "$Prefix$Color$line$($script:Ui.Reset)"
+}
+
+function Write-UiKeyValue {
+    param(
+        [Parameter(Mandatory)][string]$Label,
+        [AllowEmptyString()][string]$Value,
+        [string]$ValueColor = $script:Ui.OK,
+        [int]$LabelWidth = 20
+    )
+
+    $prefix = '  '
+    $labelCell = (Get-UiText -Text $Label -MaxLength $LabelWidth).PadRight($LabelWidth)
+    $valueWidth = [Math]::Max(1, (Get-UiWidth) - $prefix.Length - $LabelWidth - 2)
+    $valueCell = Get-UiText -Text $Value -MaxLength $valueWidth
+    Write-Host "$prefix$($script:Ui.Dim)$labelCell$($script:Ui.Reset)  $ValueColor$valueCell$($script:Ui.Reset)"
+}
+
+function Write-UiRule {
+    param([int]$Indent = 2)
+
+    $prefix = ' ' * [Math]::Max(0, $Indent)
+    $line = [string]::new([char]0x2500, [Math]::Max(1, (Get-UiWidth) - $prefix.Length - 1))
+    Write-Host "$prefix$($script:Ui.Dim)$line$($script:Ui.Reset)"
+}
+
+function New-UiShortcutSegment {
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][string]$Color
+    )
+
+    [pscustomobject]@{ Text = $Text; Color = $Color }
+}
+
+function Write-UiShortcutSegments {
+    param(
+        [Parameter(Mandatory)][object[]]$Segments,
+        [int]$Width = (Get-UiWidth)
+    )
+
+    Write-Host '  ' -NoNewline
+    $remaining = [Math]::Max(1, $Width - 3)
+    foreach ($segment in $Segments) {
+        if ($remaining -le 0) {
+            break
+        }
+
+        $text = [string]$segment.Text
+        if ($text.Length -gt $remaining) {
+            $text = if ($remaining -le 3) { $text.Substring(0, $remaining) } else { $text.Substring(0, $remaining - 3) + '...' }
+        }
+
+        Write-Host "$($segment.Color)$text$($script:Ui.Reset)" -NoNewline
+        $remaining -= $text.Length
+    }
+    Write-Host ''
+}
+
 function Show-SystemCleanupHeader {
     param(
         [Parameter(Mandatory)][string]$SectionTitle,
@@ -135,32 +250,26 @@ function Show-SystemCleanupHeader {
     )
 
     Clear-Host
-    $width = 100
-    try {
-        $width = [Math]::Min(100, $Host.UI.RawUI.WindowSize.Width - 2)
-    }
-    catch {
-    }
+    $width = Get-UiWidth
 
     $border = [string]::new([char]0x2550, ($width - 2))
     $titleText = " $($script:AppName) v$($script:AppVersion)"
     $subtitleText = ' Repair + Update + Cache Cleanup'
     $updateStatus = Get-SystemCleanupUpdateLabel
     $updateText = " Update: $($updateStatus.Label)"
-    $titlePad = [Math]::Max(0, $width - 2 - $titleText.Length)
-    $subtitlePad = [Math]::Max(0, $width - 2 - $subtitleText.Length)
-    $updatePad = [Math]::Max(0, $width - 2 - $updateText.Length)
 
     Write-Host ''
     Write-Host "$($script:Ui.H1)$([char]0x2554)$border$([char]0x2557)$($script:Ui.Reset)"
-    Write-Host "$($script:Ui.H1)$([char]0x2551)$($script:Ui.Bold)$($script:Ui.White)$titleText$($script:Ui.Reset)$(' ' * $titlePad)$($script:Ui.H1)$([char]0x2551)$($script:Ui.Reset)"
-    Write-Host "$($script:Ui.H1)$([char]0x2551)$($script:Ui.Dim)$subtitleText$($script:Ui.Reset)$(' ' * $subtitlePad)$($script:Ui.H1)$([char]0x2551)$($script:Ui.Reset)"
-    Write-Host "$($script:Ui.H1)$([char]0x2551)$($updateStatus.Color)$updateText$($script:Ui.Reset)$(' ' * $updatePad)$($script:Ui.H1)$([char]0x2551)$($script:Ui.Reset)"
+    Write-BorderedRow -Text $titleText -Color $script:Ui.White -Width $width -Bold
+    Write-BorderedRow -Text $subtitleText -Color $script:Ui.Dim -Width $width
+    Write-BorderedRow -Text $updateText -Color $updateStatus.Color -Width $width
     Write-Host "$($script:Ui.H1)$([char]0x255A)$border$([char]0x255D)$($script:Ui.Reset)"
     Write-Host ''
-    Write-Host "  $($script:Ui.H1)$([char]0x25C6) $SectionTitle $($script:Ui.Dim)$([string]::new([char]0x2500, [Math]::Max(0, $width - $SectionTitle.Length - 6)))$($script:Ui.Reset)"
+    $sectionPrefix = " $([char]0x25C6) $SectionTitle "
+    $sectionLine = [string]::new([char]0x2500, [Math]::Max(0, $width - $sectionPrefix.Length - 1))
+    Write-Host "$($script:Ui.H1)$sectionPrefix$($script:Ui.Dim)$sectionLine$($script:Ui.Reset)"
     if (-not [string]::IsNullOrWhiteSpace($SectionSubtitle)) {
-        Write-Host "  $($script:Ui.Dim)$SectionSubtitle$($script:Ui.Reset)"
+        Write-UiTextLine -Text $SectionSubtitle -Color $script:Ui.Dim
     }
     Write-Host ''
 }
@@ -842,12 +951,21 @@ function Get-InstallerCoreUpdateStatusLine {
 }
 
 function Read-InstallerCoreUpdateChoice {
-    Write-Host '  Choices:' -ForegroundColor White
-    Write-Host '  ✅ [Enter] Use shown defaults' -ForegroundColor Green
-    Write-Host '           Continue with the Installer Mode + branch/source shown above' -ForegroundColor DarkGray
-    Write-Host '  ⚙️  [E]     Open full InstallerCore menu' -ForegroundColor Yellow
-    Write-Host '           Choose Local/GitHub and branch/source manually' -ForegroundColor DarkGray
-    Write-Host '  ❌ [ESC]   Cancel' -ForegroundColor Red
+    Write-Host "  $($script:Ui.White)Choices:$($script:Ui.Reset)"
+    Write-UiShortcutSegments -Segments @(
+        New-UiShortcutSegment -Text 'Enter' -Color $script:Ui.OK
+        New-UiShortcutSegment -Text ' = use shown defaults' -Color $script:Ui.White
+    )
+    Write-UiTextLine -Text 'Continue with the Installer Mode + branch/source shown above' -Prefix '        ' -Color $script:Ui.Dim
+    Write-UiShortcutSegments -Segments @(
+        New-UiShortcutSegment -Text 'E' -Color $script:Ui.Warn
+        New-UiShortcutSegment -Text ' = open full InstallerCore menu' -Color $script:Ui.White
+    )
+    Write-UiTextLine -Text 'Choose Local/GitHub and branch/source manually' -Prefix '        ' -Color $script:Ui.Dim
+    Write-UiShortcutSegments -Segments @(
+        New-UiShortcutSegment -Text 'Esc' -Color $script:Ui.Fail
+        New-UiShortcutSegment -Text ' = cancel' -Color $script:Ui.White
+    )
     Write-Host ''
     Write-Host '  Choice: ' -ForegroundColor White -NoNewline
 
@@ -884,12 +1002,18 @@ function Read-EnterOrEscChoice {
         [string]$EscLabel = 'Cancel'
     )
 
-    Write-Host '  Choices:' -ForegroundColor White
-    Write-Host ("  ✅ [Enter] {0}" -f $EnterLabel) -ForegroundColor Green
+    Write-Host "  $($script:Ui.White)Choices:$($script:Ui.Reset)"
+    Write-UiShortcutSegments -Segments @(
+        New-UiShortcutSegment -Text 'Enter' -Color $script:Ui.OK
+        New-UiShortcutSegment -Text (" = {0}" -f $EnterLabel) -Color $script:Ui.White
+    )
     if (-not [string]::IsNullOrWhiteSpace($EnterDescription)) {
-        Write-Host ("           {0}" -f $EnterDescription) -ForegroundColor DarkGray
+        Write-UiTextLine -Text $EnterDescription -Prefix '        ' -Color $script:Ui.Dim
     }
-    Write-Host ("  ❌ [ESC]   {0}" -f $EscLabel) -ForegroundColor Red
+    Write-UiShortcutSegments -Segments @(
+        New-UiShortcutSegment -Text 'Esc' -Color $script:Ui.Fail
+        New-UiShortcutSegment -Text (" = {0}" -f $EscLabel) -Color $script:Ui.White
+    )
     Write-Host ''
     Write-Host '  Choice: ' -ForegroundColor White -NoNewline
 
@@ -950,27 +1074,30 @@ function Show-ToolUpdateProgressPanel {
     }
 
     Show-SystemCleanupHeader -SectionTitle 'Update App' -SectionSubtitle 'InstallerCore'
-    Write-Host "  $messageColor$Message$($script:Ui.Reset)"
+    Write-UiTextLine -Text $Message -Prefix '  ' -Color $messageColor
 
     if (@($RecentLines).Count -gt 0) {
         Write-Host ''
-        Write-Host "  $($script:Ui.H1)$([char]0x25C6) Recent Output $($script:Ui.Dim)$([string]::new([char]0x2500, 60))$($script:Ui.Reset)"
+        $recentPrefix = " $([char]0x25C6) Recent Output "
+        $recentRule = [string]::new([char]0x2500, [Math]::Max(1, (Get-UiWidth) - $recentPrefix.Length - 1))
+        Write-Host "$($script:Ui.H1)$recentPrefix$($script:Ui.Dim)$recentRule$($script:Ui.Reset)"
         foreach ($line in @($RecentLines | Select-Object -Last 10)) {
-            $displayLine = [string]$line
-            if ($displayLine.Length -gt 118) {
-                $displayLine = $displayLine.Substring(0, 115) + '...'
-            }
-            Write-Host "  $($script:Ui.Dim)$displayLine$($script:Ui.Reset)"
+            Write-UiTextLine -Text ([string]$line) -Prefix '  ' -Color $script:Ui.Dim
         }
     }
 
     Write-Host ''
-    Write-Host "  $($script:Ui.H1)$([char]0x25C6) Commands $($script:Ui.Dim)$([string]::new([char]0x2500, 64))$($script:Ui.Reset)"
+    $commandsPrefix = " $([char]0x25C6) Commands "
+    $commandsRule = [string]::new([char]0x2500, [Math]::Max(1, (Get-UiWidth) - $commandsPrefix.Length - 1))
+    Write-Host "$($script:Ui.H1)$commandsPrefix$($script:Ui.Dim)$commandsRule$($script:Ui.Reset)"
     if ($AutoRestart) {
-        Write-Host "  $($script:Ui.OK)Restarting SystemCleanup with updated files...$($script:Ui.Reset)"
+        Write-UiTextLine -Text 'Restarting SystemCleanup with updated files...' -Prefix '  ' -Color $script:Ui.OK
     }
     else {
-        Write-Host "  $($script:Ui.Fail)$($script:Ui.Bold)ESC$($script:Ui.Reset) $($script:Ui.Dim)back$($script:Ui.Reset)"
+        Write-UiShortcutSegments -Segments @(
+            New-UiShortcutSegment -Text 'Esc' -Color $script:Ui.Fail
+            New-UiShortcutSegment -Text ' = back' -Color $script:Ui.Dim
+        )
     }
 }
 
@@ -1214,11 +1341,17 @@ function Start-SystemCleanupLauncherRelaunch {
 
 function Read-PostUpdateRelaunchChoice {
     Write-Host ''
-    Write-Host '  Relaunch choices:' -ForegroundColor White
-    Write-Host '  ✅ [Enter] Relaunch app only' -ForegroundColor Green
-    Write-Host '           Restart the updated SystemCleanup window without touching Explorer' -ForegroundColor DarkGray
-    Write-Host '  🔄 [Any other key] Restart Explorer + relaunch app' -ForegroundColor Yellow
-    Write-Host '           Explorer shell will restart with no folder window reopened' -ForegroundColor DarkGray
+    Write-Host "  $($script:Ui.White)Relaunch choices:$($script:Ui.Reset)"
+    Write-UiShortcutSegments -Segments @(
+        New-UiShortcutSegment -Text 'Enter' -Color $script:Ui.OK
+        New-UiShortcutSegment -Text ' = relaunch app only' -Color $script:Ui.White
+    )
+    Write-UiTextLine -Text 'Restart the updated SystemCleanup window without touching Explorer' -Prefix '        ' -Color $script:Ui.Dim
+    Write-UiShortcutSegments -Segments @(
+        New-UiShortcutSegment -Text 'Any other key' -Color $script:Ui.Warn
+        New-UiShortcutSegment -Text ' = restart Explorer + relaunch app' -Color $script:Ui.White
+    )
+    Write-UiTextLine -Text 'Explorer shell will restart with no folder window reopened' -Prefix '        ' -Color $script:Ui.Dim
     Write-Host ''
     Write-Host '  Choice: ' -ForegroundColor White -NoNewline
 
@@ -1304,79 +1437,67 @@ function Invoke-InstallerCoreToolUpdate {
         return
     }
 
-    Write-Host '  🧭 Detected mode:    ' -ForegroundColor DarkGray -NoNewline
-    Write-Host $state.Mode -ForegroundColor Green
-    Write-Host '  ⚙️  Installer Mode:  ' -ForegroundColor DarkGray -NoNewline
-    Write-Host $state.InstallerMode -ForegroundColor Green
+    Write-UiKeyValue -Label 'Detected mode:' -Value $state.Mode
+    Write-UiKeyValue -Label 'Installer Mode:' -Value $state.InstallerMode
     if ($state.InstallerMode -eq 'GitHub' -or $state.InstallerMode -eq 'Git fast-forward') {
         if (-not [string]::IsNullOrWhiteSpace($state.GitHubBranch)) {
-            $branchLabelName = if ($state.InstallerMode -eq 'Git fast-forward') { '  🌿 Git branch:      ' } else { '  🌿 GitHub branch:   ' }
-            Write-Host $branchLabelName -ForegroundColor DarkGray -NoNewline
-            Write-Host $state.GitHubBranch -ForegroundColor Green
+            $branchLabelName = if ($state.InstallerMode -eq 'Git fast-forward') { 'Git branch:' } else { 'GitHub branch:' }
+            Write-UiKeyValue -Label $branchLabelName -Value $state.GitHubBranch
         }
         else {
-            $branchLabelName = if ($state.InstallerMode -eq 'Git fast-forward') { '  🌿 Git branch:      ' } else { '  🌿 GitHub branch:   ' }
-            Write-Host $branchLabelName -ForegroundColor DarkGray -NoNewline
-            Write-Host 'auto-detect' -ForegroundColor Green
+            $branchLabelName = if ($state.InstallerMode -eq 'Git fast-forward') { 'Git branch:' } else { 'GitHub branch:' }
+            Write-UiKeyValue -Label $branchLabelName -Value 'auto-detect'
         }
     }
     elseif (-not [string]::IsNullOrWhiteSpace($state.LocalSourcePath)) {
-        Write-Host '  📁 Local source:    ' -ForegroundColor DarkGray -NoNewline
-        Write-Host $state.LocalSourcePath -ForegroundColor Green
+        Write-UiKeyValue -Label 'Local source:' -Value $state.LocalSourcePath
     }
-    Write-Host "  Install.ps1 path:   $($state.InstallScriptPath)" -ForegroundColor DarkGray
+    Write-UiKeyValue -Label 'Install.ps1 path:' -Value $state.InstallScriptPath -ValueColor $script:Ui.Dim
     Write-Host ''
-    Write-Host '  Update status:      ' -ForegroundColor DarkGray -NoNewline
     $statusColor = switch ([string]$updateDetails.Status) {
-        'UpToDate' { 'Green' }
-        'UpdateAvailable' { 'Yellow' }
-        'WorkspaceModified' { 'Yellow' }
-        'LocalAhead' { 'Cyan' }
-        'Error' { 'Red' }
-        default { 'Gray' }
+        'UpToDate' { $script:Ui.OK }
+        'UpdateAvailable' { $script:Ui.Warn }
+        'WorkspaceModified' { $script:Ui.Warn }
+        'LocalAhead' { $script:Ui.H1 }
+        'Error' { $script:Ui.Fail }
+        default { $script:Ui.Dim }
     }
-    Write-Host $updateDetails.Status -ForegroundColor $statusColor
-    Write-Host '  Current version:    ' -ForegroundColor DarkGray -NoNewline
-    Write-Host $updateDetails.LocalVersion -ForegroundColor Green
-    Write-Host '  Latest version:     ' -ForegroundColor DarkGray -NoNewline
-    Write-Host $updateDetails.LatestVersion -ForegroundColor Green
-    Write-Host '  Current commit:     ' -ForegroundColor DarkGray -NoNewline
-    Write-Host $updateDetails.LocalCommit -ForegroundColor Green
-    Write-Host '  Latest commit:      ' -ForegroundColor DarkGray -NoNewline
-    Write-Host $updateDetails.LatestCommit -ForegroundColor Green
-    Write-Host '  Current source:     ' -ForegroundColor DarkGray -NoNewline
+    Write-UiKeyValue -Label 'Update status:' -Value $updateDetails.Status -ValueColor $statusColor
+    Write-UiKeyValue -Label 'Current version:' -Value $updateDetails.LocalVersion
+    Write-UiKeyValue -Label 'Latest version:' -Value $updateDetails.LatestVersion
+    Write-UiKeyValue -Label 'Current commit:' -Value $updateDetails.LocalCommit
+    Write-UiKeyValue -Label 'Latest commit:' -Value $updateDetails.LatestCommit
     $sourceLabel = if ($updateDetails.HasLocalChanges) { "$($updateDetails.SourceKind) + local changes" } else { $updateDetails.SourceKind }
-    Write-Host $sourceLabel -ForegroundColor Green
-    Write-Host '  Last check:         ' -ForegroundColor DarkGray -NoNewline
-    Write-Host ($updateDetails.CheckedAt -replace 'T', ' ') -ForegroundColor DarkGray
+    Write-UiKeyValue -Label 'Current source:' -Value $sourceLabel
+    Write-UiKeyValue -Label 'Last check:' -Value ($updateDetails.CheckedAt -replace 'T', ' ') -ValueColor $script:Ui.Dim
     if (-not [string]::IsNullOrWhiteSpace([string]$updateDetails.Message)) {
-        Write-Host "  $($updateDetails.Message)" -ForegroundColor DarkGray
+        Write-UiTextLine -Text $updateDetails.Message -Prefix '  ' -Color $script:Ui.Dim
     }
     Write-Host ""
-    Write-Host "  ⚠️  This will update the tool via the sibling InstallerCore-generated Install.ps1." -ForegroundColor Yellow
+    Write-UiTextLine -Text 'This will update the tool via the sibling InstallerCore-generated Install.ps1.' -Prefix '  ' -Color $script:Ui.Warn
     if ($state.DefaultAction -eq 'GitFastForward') {
-        Write-Host "      • Current git working copy will use fetch + fast-forward only" -ForegroundColor Gray
-        Write-Host "      • Dirty workspaces are refused instead of overwritten" -ForegroundColor Gray
-        Write-Host "      • The launcher will relaunch the app after a successful update" -ForegroundColor Gray
+        Write-UiTextLine -Text '- Current git working copy will use fetch + fast-forward only' -Prefix '      ' -Color $script:Ui.Dim
+        Write-UiTextLine -Text '- Dirty workspaces are refused instead of overwritten' -Prefix '      ' -Color $script:Ui.Dim
+        Write-UiTextLine -Text '- The launcher will relaunch the app after a successful update' -Prefix '      ' -Color $script:Ui.Dim
     }
     elseif ($state.DefaultAction -eq 'DownloadLatest') {
-        Write-Host "      • Current folder will be refreshed in place from GitHub" -ForegroundColor Gray
-        Write-Host "      • The launcher will show update progress and relaunch the updated app" -ForegroundColor Gray
+        Write-UiTextLine -Text '- Current folder will be refreshed in place from GitHub' -Prefix '      ' -Color $script:Ui.Dim
+        Write-UiTextLine -Text '- The launcher will show update progress and relaunch the updated app' -Prefix '      ' -Color $script:Ui.Dim
         if ($state.Mode -eq 'Repo copy') {
-            Write-Host "      • Repo-copy defaults follow the currently checked-out git branch" -ForegroundColor Gray
+            Write-UiTextLine -Text '- Repo-copy defaults follow the currently checked-out git branch' -Prefix '      ' -Color $script:Ui.Dim
         }
     }
     elseif ($state.InstallerMode -eq 'Local') {
-        Write-Host "      • Installed copy under %LOCALAPPDATA% will be updated from the recorded local source" -ForegroundColor Gray
-        Write-Host "      • A successful update will save that Local/GitHub choice for next time" -ForegroundColor Gray
-        Write-Host "      • The launcher will show update progress and relaunch the updated app" -ForegroundColor Gray
-        Write-Host "      • Use E if you want the full InstallerCore menu for GitHub/source switching" -ForegroundColor Gray
+        Write-UiTextLine -Text '- Installed copy under %LOCALAPPDATA% will be updated from the recorded local source' -Prefix '      ' -Color $script:Ui.Dim
+        Write-UiTextLine -Text '- A successful update will save that Local/GitHub choice for next time' -Prefix '      ' -Color $script:Ui.Dim
+        Write-UiTextLine -Text '- The launcher will show update progress and relaunch the updated app' -Prefix '      ' -Color $script:Ui.Dim
+        Write-UiTextLine -Text '- Use E if you want the full InstallerCore menu for GitHub/source switching' -Prefix '      ' -Color $script:Ui.Dim
     }
     else {
-        Write-Host "      • Installed copy under %LOCALAPPDATA% will be updated from GitHub" -ForegroundColor Gray
-        Write-Host "      • A successful update will save the chosen GitHub branch for next time" -ForegroundColor Gray
-        Write-Host "      • The launcher will show update progress and relaunch the updated app" -ForegroundColor Gray
-        Write-Host "      • Registry/verification paths stay under the normal InstallerCore update flow" -ForegroundColor Gray
+        Write-UiTextLine -Text '- Installed copy under %LOCALAPPDATA% will be updated from GitHub' -Prefix '      ' -Color $script:Ui.Dim
+        Write-UiTextLine -Text '- A successful update will save the chosen GitHub branch for next time' -Prefix '      ' -Color $script:Ui.Dim
+        Write-UiTextLine -Text '- The launcher will show update progress and relaunch the updated app' -Prefix '      ' -Color $script:Ui.Dim
+        Write-UiTextLine -Text '- Registry/verification paths stay under the normal InstallerCore update flow' -Prefix '      ' -Color $script:Ui.Dim
     }
     Write-Host ""
 
@@ -1537,11 +1658,11 @@ function Invoke-DeliveryOptimizationCleanupAndDisable {
     $before = Get-DeliveryOptimizationState
 
     Show-SystemCleanupHeader -SectionTitle 'Delivery Optimization Cleanup + Disable' -SectionSubtitle 'Clear cache and force CDN-only mode'
-    Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
-    Write-Host "      • Clear Delivery Optimization cache with Delete-DeliveryOptimizationCache" -ForegroundColor Gray
-    Write-Host "      • Force DownloadMode = 0 (CdnOnly) to disable peer-to-peer sharing safely" -ForegroundColor Gray
-    Write-Host "      • Keep Windows Update / Store downloads working from Microsoft/CDN" -ForegroundColor Gray
-    Write-Host "      • Try to refresh the Delivery Optimization service" -ForegroundColor Gray
+    Write-UiTextLine -Text 'This will:' -Prefix '  ' -Color $script:Ui.Warn
+    Write-UiTextLine -Text '- Clear Delivery Optimization cache with Delete-DeliveryOptimizationCache' -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- Force DownloadMode = 0 (CdnOnly) to disable peer-to-peer sharing safely' -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- Keep Windows Update / Store downloads working from Microsoft/CDN' -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- Try to refresh the Delivery Optimization service' -Prefix '      ' -Color $script:Ui.Dim
     Write-Host ""
 
     if (-not $before.IsAvailable) {
@@ -1549,31 +1670,26 @@ function Invoke-DeliveryOptimizationCleanupAndDisable {
         return
     }
 
-    Write-Host "  Current status: " -ForegroundColor White -NoNewline
-    if ($before.IsDisabled) {
-        Write-Host "DISABLED ✅" -ForegroundColor Green
+    $statusLabel = if ($before.IsDisabled) {
+        'DISABLED'
     }
     elseif ($before.StatusLabel -eq 'Enabled') {
-        Write-Host "ENABLED ⚠️" -ForegroundColor Yellow
+        'ENABLED'
     }
     else {
-        Write-Host "UNKNOWN ⚠️" -ForegroundColor Yellow
+        'UNKNOWN'
     }
-    Write-Host '      ⚙️  Mode:       ' -ForegroundColor DarkGray -NoNewline
-    Write-Host $before.DownloadMode -ForegroundColor Green
-    Write-Host '      🧩 Provider:   ' -ForegroundColor DarkGray -NoNewline
-    Write-Host $before.DownloadModeProvider -ForegroundColor Green
-    Write-Host '      💾 Cache size: ' -ForegroundColor DarkGray -NoNewline
-    Write-Host $before.CacheSizeLabel -ForegroundColor Green
-    Write-Host '      📦 Cache files:' -ForegroundColor DarkGray -NoNewline
-    Write-Host (" {0}" -f $before.Files) -ForegroundColor Green
+    $statusColor = if ($before.IsDisabled) { $script:Ui.OK } else { $script:Ui.Warn }
+    Write-UiKeyValue -Label 'Current status:' -Value $statusLabel -ValueColor $statusColor
+    Write-UiKeyValue -Label 'Mode:' -Value $before.DownloadMode
+    Write-UiKeyValue -Label 'Provider:' -Value $before.DownloadModeProvider
+    Write-UiKeyValue -Label 'Cache size:' -Value $before.CacheSizeLabel
+    Write-UiKeyValue -Label 'Cache files:' -Value ([string]$before.Files)
     if (-not [string]::IsNullOrWhiteSpace($before.WorkingDirectory)) {
-        Write-Host '      📁 Cache path: ' -ForegroundColor DarkGray -NoNewline
-        Write-Host $before.WorkingDirectory -ForegroundColor Green
+        Write-UiKeyValue -Label 'Cache path:' -Value $before.WorkingDirectory
     }
     if ($null -ne $before.PolicyDownloadMode) {
-        Write-Host '      🛡️  Policy mode:' -ForegroundColor DarkGray -NoNewline
-        Write-Host (" {0}" -f $before.PolicyDownloadMode) -ForegroundColor Green
+        Write-UiKeyValue -Label 'Policy mode:' -Value ([string]$before.PolicyDownloadMode)
     }
     Write-Host ""
 
@@ -1680,8 +1796,9 @@ function Show-UpdateList {
         return $false
     }
     
-    Write-Host "`n  $Header" -ForegroundColor Cyan
-    Write-Host "  $('─' * 60)" -ForegroundColor DarkGray
+    Write-Host ''
+    Write-UiTextLine -Text $Header -Prefix '  ' -Color $script:Ui.H1
+    Write-UiRule
     
     for ($i = 0; $i -lt $Results.Updates.Count; $i++) {
         $update = $Results.Updates.Item($i)
@@ -1695,15 +1812,10 @@ function Show-UpdateList {
         }
         
         $idx = $i + 1
-        Write-Host "    [$idx] " -ForegroundColor Yellow -NoNewline
-        Write-Host "$title$kb" -ForegroundColor White -NoNewline
-        if ($sizeMB -gt 0) {
-            Write-Host " — ${sizeMB} MB" -ForegroundColor DarkGray
-        } else {
-            Write-Host ""
-        }
+        $sizeLabel = if ($sizeMB -gt 0) { " - ${sizeMB} MB" } else { '' }
+        Write-UiTextLine -Text ("[$idx] $title$kb$sizeLabel") -Prefix '    ' -Color $script:Ui.White
     }
-    Write-Host "  $('─' * 60)" -ForegroundColor DarkGray
+    Write-UiRule
     return $true
 }
 
@@ -1713,16 +1825,11 @@ function Show-UpdateList {
 function Hide-SelectedUpdates {
     # ⚠️ Workflow warning — hiding only works reliably on a fresh update list
     Write-Host "" 
-    Write-Host "  ╔════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
-    Write-Host "  ║  ⚠️  CORRECT WORKFLOW TO PERMANENTLY HIDE UPDATES:       ║" -ForegroundColor Yellow
-    Write-Host "  ║                                                          ║" -ForegroundColor Yellow
-    Write-Host "  ║   1. Reset Update Cache  [5]                             ║" -ForegroundColor Yellow
-    Write-Host "  ║   2. REBOOT your PC                                      ║" -ForegroundColor Yellow
-    Write-Host "  ║   3. Come back here and Hide Updates  [2]                ║" -ForegroundColor Yellow
-    Write-Host "  ║                                                          ║" -ForegroundColor Yellow
-    Write-Host "  ║  If you hide FIRST and then reset, the hidden flag       ║" -ForegroundColor Yellow
-    Write-Host "  ║  gets wiped and the update will reappear!                ║" -ForegroundColor Yellow
-    Write-Host "  ╚════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
+    Write-UiTextLine -Text 'CORRECT WORKFLOW TO PERMANENTLY HIDE UPDATES:' -Prefix '  ' -Color $script:Ui.Warn
+    Write-UiTextLine -Text '1. Reset Update Cache [5]' -Prefix '     ' -Color $script:Ui.Warn
+    Write-UiTextLine -Text '2. REBOOT your PC' -Prefix '     ' -Color $script:Ui.Warn
+    Write-UiTextLine -Text '3. Come back here and Hide Updates [2]' -Prefix '     ' -Color $script:Ui.Warn
+    Write-UiTextLine -Text 'If you hide first and then reset, the hidden flag gets wiped and the update will reappear.' -Prefix '  ' -Color $script:Ui.Warn
     Write-Host ""
     Write-Host "  Continue anyway? (Y/N)" -ForegroundColor Gray
     $proceed = Read-Host "  Choice"
@@ -2084,8 +2191,8 @@ function Show-ComponentStoreCleanupInfo {
         [string]$Title
     )
 
-    Write-Host "  $Title" -ForegroundColor Cyan
-    Write-Host "  $('─' * 40)" -ForegroundColor DarkGray
+    Write-UiTextLine -Text $Title -Prefix '  ' -Color $script:Ui.H1
+    Write-UiRule
 
     if (-not $Info -or -not $Info.Succeeded) {
         $message = if ($Info -and -not [string]::IsNullOrWhiteSpace($Info.ErrorMessage)) {
@@ -2094,13 +2201,13 @@ function Show-ComponentStoreCleanupInfo {
         else {
             'Could not read DISM component store status.'
         }
-        Write-Host "     $message" -ForegroundColor Yellow
+        Write-UiTextLine -Text $message -Prefix '     ' -Color $script:Ui.Warn
         return
     }
 
-    Write-Host "     Reclaimable packages: $($Info.ReclaimablePackages)" -ForegroundColor Gray
-    Write-Host "     Backups and Disabled Features: $($Info.BackupsAndDisabledFeatures)" -ForegroundColor Gray
-    Write-Host "     Cleanup recommended: $($Info.CleanupRecommended)" -ForegroundColor Gray
+    Write-UiKeyValue -Label 'Reclaimable packages:' -Value $Info.ReclaimablePackages -ValueColor $script:Ui.Dim
+    Write-UiKeyValue -Label 'Backups/features:' -Value $Info.BackupsAndDisabledFeatures -ValueColor $script:Ui.Dim
+    Write-UiKeyValue -Label 'Cleanup recommended:' -Value $Info.CleanupRecommended -ValueColor $script:Ui.Dim
 }
 
 function Set-IsolatedUpdateCleanupSlot {
@@ -2434,14 +2541,14 @@ function Remove-LiveSoftwareDistributionDownload {
     $downloadPath = 'C:\Windows\SoftwareDistribution\Download'
 
     Show-SystemCleanupHeader -SectionTitle 'Live SoftwareDistribution Cleanup' -SectionSubtitle 'Clean the live Download cache safely'
-    Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
-    Write-Host "      • Stop update services temporarily" -ForegroundColor Gray
-    Write-Host "      • Clean the live SoftwareDistribution\\Download cache" -ForegroundColor Gray
-    Write-Host "      • Keep DataStore / update history intact" -ForegroundColor Gray
-    Write-Host "      • Restart services" -ForegroundColor Gray
+    Write-UiTextLine -Text 'This will:' -Prefix '  ' -Color $script:Ui.Warn
+    Write-UiTextLine -Text '- Stop update services temporarily' -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- Clean the live SoftwareDistribution\Download cache' -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- Keep DataStore / update history intact' -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- Restart services' -Prefix '      ' -Color $script:Ui.Dim
     Write-Host ""
-    Write-Host "  💡 Use this after updates to reclaim disk space." -ForegroundColor Cyan
-    Write-Host "     For hide/troubleshooting workflow, keep using [5] Reset Update Cache." -ForegroundColor DarkGray
+    Write-UiTextLine -Text 'Use this after updates to reclaim disk space.' -Prefix '  ' -Color $script:Ui.H1
+    Write-UiTextLine -Text 'For hide/troubleshooting workflow, keep using [5] Reset Update Cache.' -Prefix '     ' -Color $script:Ui.Dim
     Write-Host ""
 
     if (-not (Test-Path -LiteralPath $downloadPath)) {
@@ -2541,22 +2648,22 @@ function Invoke-WindowsUpdateCleanup {
     $debugLogPath = New-WindowsUpdateCleanupDebugLogPath
 
     Write-Host "`n  🔵 WINDOWS UPDATE CLEANUP (DISK CLEANUP UTILITY)" -ForegroundColor Cyan
-    Write-Host "  $('─' * 54)" -ForegroundColor DarkGray
-    Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
-    Write-Host "      • Run Disk Cleanup Utility: cleanmgr /sagerun:$slot" -ForegroundColor Gray
-    Write-Host "      • Clean superseded WinSxS / component store update leftovers" -ForegroundColor Gray
-    Write-Host "      • May also scavenge WinSxS\\Temp\\PendingDeletes leftovers" -ForegroundColor Gray
-    Write-Host "      • Leave live SoftwareDistribution alone" -ForegroundColor Gray
+    Write-UiRule
+    Write-UiTextLine -Text 'This will:' -Prefix '  ' -Color $script:Ui.Warn
+    Write-UiTextLine -Text ("- Run Disk Cleanup Utility: cleanmgr /sagerun:{0}" -f $slot) -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- Clean superseded WinSxS / component store update leftovers' -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- May also scavenge WinSxS\Temp\PendingDeletes leftovers' -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- Leave live SoftwareDistribution alone' -Prefix '      ' -Color $script:Ui.Dim
     Write-Host ""
-    Write-Host "  💡 Best used after Windows Updates are installed and the PC has rebooted." -ForegroundColor Cyan
-    Write-Host "     Use this for extra post-update disk cleanup, not for hide/reset troubleshooting." -ForegroundColor DarkGray
+    Write-UiTextLine -Text 'Best used after Windows Updates are installed and the PC has rebooted.' -Prefix '  ' -Color $script:Ui.H1
+    Write-UiTextLine -Text 'Use this for extra post-update disk cleanup, not for hide/reset troubleshooting.' -Prefix '     ' -Color $script:Ui.Dim
     Write-Host ""
 
     $beforeInfo = Get-ComponentStoreCleanupInfo
     Show-ComponentStoreCleanupInfo -Info $beforeInfo -Title 'Current component store status'
     Write-Host ""
     if (-not [string]::IsNullOrWhiteSpace($debugLogPath)) {
-        Write-Host "  Debug log: $debugLogPath" -ForegroundColor DarkGray
+        Write-UiTextLine -Text "Debug log: $debugLogPath" -Prefix '  ' -Color $script:Ui.Dim
         Write-Host ""
     }
 
@@ -2648,13 +2755,13 @@ function Reset-UpdateCache {
     Write-Host "`n  🔵 RESETTING WINDOWS UPDATE CACHE" -ForegroundColor Cyan
     Write-Host "  $('─' * 40)" -ForegroundColor DarkGray
     
-    Write-Host "  ⚠️  This will:" -ForegroundColor Yellow
-    Write-Host "      • Stop core update services and try to quiet update orchestrators" -ForegroundColor Gray
-    Write-Host "      • Delete any existing .old backup folders first" -ForegroundColor Gray
-    Write-Host "      • Rename SoftwareDistribution and catroot2 folders" -ForegroundColor Gray
-    Write-Host "      • Restart services" -ForegroundColor Gray
+    Write-UiTextLine -Text 'This will:' -Prefix '  ' -Color $script:Ui.Warn
+    Write-UiTextLine -Text '- Stop core update services and try to quiet update orchestrators' -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- Delete any existing .old backup folders first' -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- Rename SoftwareDistribution and catroot2 folders' -Prefix '      ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '- Restart services' -Prefix '      ' -Color $script:Ui.Dim
     Write-Host ""
-    Write-Host "  💡 After reset, REBOOT, then use [2] Hide Updates on the fresh list." -ForegroundColor Cyan
+    Write-UiTextLine -Text 'After reset, REBOOT, then use [2] Hide Updates on the fresh list.' -Prefix '  ' -Color $script:Ui.H1
     Write-Host ""
     
     $confirm = Read-Host "  Proceed? (Y/N)"
@@ -2730,16 +2837,11 @@ function Reset-UpdateCache {
         Write-Host "     Reboot and run the reset again if Windows Update still behaves inconsistently." -ForegroundColor DarkGray
     }
     Write-Host ""
-    Write-Host "  ╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "  ║  💡  NEXT STEPS:                                         ║" -ForegroundColor Cyan
-    Write-Host "  ║                                                          ║" -ForegroundColor Cyan
-    Write-Host "  ║   1. REBOOT your PC now                                  ║" -ForegroundColor Cyan
-    Write-Host "  ║   2. After reboot, open this tool again                  ║" -ForegroundColor Cyan
-    Write-Host "  ║   3. Use [2] Hide Updates on the fresh update list        ║" -ForegroundColor Cyan
-    Write-Host "  ║                                                          ║" -ForegroundColor Cyan
-        Write-Host "  ║  The .old backup folders will be auto-cleaned on the     ║" -ForegroundColor Cyan
-        Write-Host "  ║  next reset, or use [7] to clean them manually.          ║" -ForegroundColor Cyan
-        Write-Host "  ╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-UiTextLine -Text 'NEXT STEPS:' -Prefix '  ' -Color $script:Ui.H1
+    Write-UiTextLine -Text '1. REBOOT your PC now' -Prefix '     ' -Color $script:Ui.H1
+    Write-UiTextLine -Text '2. After reboot, open this tool again' -Prefix '     ' -Color $script:Ui.H1
+    Write-UiTextLine -Text '3. Use [2] Hide Updates on the fresh update list' -Prefix '     ' -Color $script:Ui.H1
+    Write-UiTextLine -Text 'The .old backup folders will be auto-cleaned on the next reset, or use [6] to clean them manually.' -Prefix '  ' -Color $script:Ui.Dim
 }
 
 # ─────────────────────────────────────────────
@@ -2919,9 +3021,8 @@ function Toggle-Win11Block {
 
     if ($state.IsBlocked) {
         Write-Host ""
-        Write-Host "  Current status: " -ForegroundColor White -NoNewline
-        Write-Host "POLICY ACTIVE ✅" -ForegroundColor Green
-        Write-Host "  Windows 11 feature upgrade is currently blocked via policy." -ForegroundColor DarkGray
+        Write-UiKeyValue -Label 'Current status:' -Value 'POLICY ACTIVE' -ValueColor $script:Ui.OK
+        Write-UiTextLine -Text 'Windows 11 feature upgrade is currently blocked via policy.' -Prefix '  ' -Color $script:Ui.Dim
         Write-Host ""
         Write-Host "  Do you want to REMOVE the block? (Y/N)" -ForegroundColor Gray
         $confirm = Read-Host "  Choice"
@@ -2933,18 +3034,17 @@ function Toggle-Win11Block {
     }
     else {
         Write-Host ""
-        Write-Host "  Current status: " -ForegroundColor White -NoNewline
         if ($state.StatusLabel -eq 'Policy mismatch') {
-            Write-Host "POLICY MISMATCH ⚠️" -ForegroundColor Yellow
-            Write-Host "  The registry contains partial/invalid Win11 block values." -ForegroundColor DarkGray
-            Write-Host "      TargetReleaseVersion     = $($state.TargetReleaseVersion)" -ForegroundColor DarkGray
-            Write-Host "      TargetReleaseVersionInfo = $($state.TargetReleaseVersionInfo)" -ForegroundColor DarkGray
-            Write-Host "      ProductVersion           = $($state.ProductVersion)" -ForegroundColor DarkGray
-            Write-Host "      Expected target          = $($state.ExpectedTargetReleaseVersionInfo)" -ForegroundColor DarkGray
+            Write-UiKeyValue -Label 'Current status:' -Value 'POLICY MISMATCH' -ValueColor $script:Ui.Warn
+            Write-UiTextLine -Text 'The registry contains partial/invalid Win11 block values.' -Prefix '  ' -Color $script:Ui.Dim
+            Write-UiKeyValue -Label 'TargetReleaseVersion:' -Value $state.TargetReleaseVersion -ValueColor $script:Ui.Dim
+            Write-UiKeyValue -Label 'TargetReleaseInfo:' -Value $state.TargetReleaseVersionInfo -ValueColor $script:Ui.Dim
+            Write-UiKeyValue -Label 'ProductVersion:' -Value $state.ProductVersion -ValueColor $script:Ui.Dim
+            Write-UiKeyValue -Label 'Expected target:' -Value $state.ExpectedTargetReleaseVersionInfo -ValueColor $script:Ui.Dim
         }
         else {
-            Write-Host "NOT CONFIGURED ⚠️" -ForegroundColor Yellow
-            Write-Host "  Windows Update may offer Windows 11 if your hardware is compatible." -ForegroundColor DarkGray
+            Write-UiKeyValue -Label 'Current status:' -Value 'NOT CONFIGURED' -ValueColor $script:Ui.Warn
+            Write-UiTextLine -Text 'Windows Update may offer Windows 11 if your hardware is compatible.' -Prefix '  ' -Color $script:Ui.Dim
         }
         Write-Host ""
         Write-Host "  Do you want to BLOCK Windows 11 upgrade? (Y/N)" -ForegroundColor Gray
@@ -3068,33 +3168,35 @@ while ($menuLoop) {
     }
 
     Write-Host ""
-    Write-Host "  ==========================================" -ForegroundColor Cyan
-    Write-Host "     WINDOWS UPDATE MANAGER" -ForegroundColor White
-    Write-Host "  ==========================================" -ForegroundColor Cyan
+    Write-UiRule
+    Write-UiTextLine -Text 'WINDOWS UPDATE MANAGER' -Prefix '  ' -Color $script:Ui.White
+    Write-UiRule
     Write-Host ""
-    Write-Host "  ┌──────────────────────────────────────────────────────┐" -ForegroundColor DarkYellow
-    Write-Host "  │  💡 To permanently hide an update:                  │" -ForegroundColor DarkYellow
-    Write-Host "  │     [5] Reset Cache → Reboot → [2] Hide Updates     │" -ForegroundColor DarkYellow
-    Write-Host "  └──────────────────────────────────────────────────────┘" -ForegroundColor DarkYellow
+    Write-UiTextLine -Text 'To permanently hide an update:' -Prefix '  ' -Color $script:Ui.Warn
+    Write-UiTextLine -Text '[5] Reset Cache -> Reboot -> [2] Hide Updates' -Prefix '     ' -Color $script:Ui.Warn
     Write-Host ""
-    Write-Host "  [1]  List Pending Updates" -ForegroundColor White
-    Write-Host "  [2]  Hide Update(s)" -ForegroundColor Yellow
-    Write-Host "         Block unwanted updates from appearing" -ForegroundColor DarkGray
-    Write-Host "  [3]  Show Hidden Updates" -ForegroundColor White
-    Write-Host "  [4]  Unhide Update(s)" -ForegroundColor Green
-    Write-Host "         Restore previously hidden updates" -ForegroundColor DarkGray
-    Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
-    Write-Host "  [5]  Reset Update Cache" -ForegroundColor Red
-    Write-Host "         Reset SoftwareDistribution + catroot2" -ForegroundColor DarkGray
+    Write-UiTextLine -Text '[1]  List Pending Updates' -Prefix '  ' -Color $script:Ui.White
+    Write-UiTextLine -Text '[2]  Hide Update(s)' -Prefix '  ' -Color $script:Ui.Warn
+    Write-UiTextLine -Text 'Block unwanted updates from appearing' -Prefix '       ' -Color $script:Ui.Dim
+    Write-UiTextLine -Text '[3]  Show Hidden Updates' -Prefix '  ' -Color $script:Ui.White
+    Write-UiTextLine -Text '[4]  Unhide Update(s)' -Prefix '  ' -Color $script:Ui.OK
+    Write-UiTextLine -Text 'Restore previously hidden updates' -Prefix '       ' -Color $script:Ui.Dim
+    Write-UiRule
+    Write-UiTextLine -Text '[5]  Reset Update Cache' -Prefix '  ' -Color $script:Ui.Fail
+    Write-UiTextLine -Text 'Reset SoftwareDistribution + catroot2' -Prefix '       ' -Color $script:Ui.Dim
     $oldFoldersStatus = Get-StaleOldFoldersStatusLine
-    Write-Host "  [6]  Clean Stale Backup Folders" -ForegroundColor Magenta
-    Write-Host "         $oldFoldersStatus" -ForegroundColor DarkGray
-    Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
-    Write-Host "  [7]  Block Windows 11 Upgrade  " -ForegroundColor Cyan -NoNewline
-    Write-Host "[$win11Status]" -ForegroundColor $win11StatusColor
-    Write-Host "         Pin this PC to Windows 10 via Group Policy" -ForegroundColor DarkGray
-    Write-Host "  $('─' * 42)" -ForegroundColor DarkGray
-    Write-Host "  [ESC] Back to main menu" -ForegroundColor DarkGray
+    Write-UiTextLine -Text '[6]  Clean Stale Backup Folders' -Prefix '  ' -Color $script:Ui.H1
+    Write-UiTextLine -Text $oldFoldersStatus -Prefix '       ' -Color $script:Ui.Dim
+    Write-UiRule
+    $win11AnsiColor = switch ($win11State.StatusLabel) {
+        'Policy active' { $script:Ui.OK }
+        'Policy mismatch' { $script:Ui.Warn }
+        default { $script:Ui.Warn }
+    }
+    Write-UiTextLine -Text ("[7]  Block Windows 11 Upgrade [{0}]" -f $win11Status) -Prefix '  ' -Color $win11AnsiColor
+    Write-UiTextLine -Text 'Pin this PC to Windows 10 via Group Policy' -Prefix '       ' -Color $script:Ui.Dim
+    Write-UiRule
+    Write-UiTextLine -Text '[ESC] Back to main menu' -Prefix '  ' -Color $script:Ui.Dim
     Write-Host ""
     $choice = Read-MenuKey -Prompt '  Choose'
     

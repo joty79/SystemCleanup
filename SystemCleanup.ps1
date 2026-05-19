@@ -11,7 +11,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $script:LogDir = ''
 $script:LogFile = ''
 $script:AppName = 'SystemCleanup'
-$script:AppVersion = '1.0.1'
+$script:AppVersion = '1.0.3'
 $script:AppGitHubRepo = 'joty79/SystemCleanup'
 $script:AppMetadataPath = Join-Path $PSScriptRoot 'app-metadata.json'
 $script:StatePath = Join-Path $PSScriptRoot 'state'
@@ -915,11 +915,146 @@ function Clear-ConsoleInputBuffer {
 
 function Get-UiWidth {
     try {
-        return [Math]::Min(110, $Host.UI.RawUI.WindowSize.Width - 2)
+        $rawWidth = [Math]::Max(40, $Host.UI.RawUI.WindowSize.Width - 2)
+        $consoleWidth = [Math]::Max(40, [Console]::WindowWidth - 2)
+        $hostWidth = [Math]::Min($rawWidth, $consoleWidth)
+        return [Math]::Min(96, $hostWidth)
     }
     catch {
         return 88
     }
+}
+
+function Get-UiText {
+    param(
+        [AllowEmptyString()][string]$Text,
+        [int]$MaxLength
+    )
+
+    if ([string]::IsNullOrEmpty($Text) -or $MaxLength -le 0) {
+        return ''
+    }
+
+    if ($Text.Length -le $MaxLength) {
+        return $Text
+    }
+
+    if ($MaxLength -le 3) {
+        return $Text.Substring(0, $MaxLength)
+    }
+
+    return ($Text.Substring(0, $MaxLength - 3) + '...')
+}
+
+function Write-BorderedRow {
+    param(
+        [AllowEmptyString()][string]$Text,
+        [string]$Color = $script:C.White,
+        [int]$Width = (Get-UiWidth),
+        [switch]$Bold
+    )
+
+    $contentWidth = [Math]::Max(1, $Width - 2)
+    $cell = Get-UiText -Text $Text -MaxLength $contentWidth
+    $padding = ' ' * [Math]::Max(0, $contentWidth - $cell.Length)
+    $boldPrefix = if ($Bold) { $script:C.Bold } else { '' }
+
+    Write-Host "$($script:C.H1)$([char]0x2551)$boldPrefix$Color$cell$($script:C.Reset)$padding$($script:C.H1)$([char]0x2551)$($script:C.Reset)"
+}
+
+function Write-UiTextLine {
+    param(
+        [AllowEmptyString()][string]$Text,
+        [string]$Prefix = '  ',
+        [string]$Color = $script:C.Dim,
+        [int]$Width = (Get-UiWidth)
+    )
+
+    $maxTextLength = [Math]::Max(1, $Width - $Prefix.Length - 1)
+    $line = Get-UiText -Text $Text -MaxLength $maxTextLength
+    Write-Host "$Prefix$Color$line$($script:C.Reset)$($script:C.EraseLn)"
+}
+
+function New-ShortcutSegment {
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][string]$Color
+    )
+
+    [pscustomobject]@{ Text = $Text; Color = $Color }
+}
+
+function Write-ShortcutSegments {
+    param(
+        [Parameter(Mandatory)][object[]]$Segments,
+        [int]$Width = (Get-UiWidth)
+    )
+
+    Write-Host '  ' -NoNewline
+    $remaining = [Math]::Max(1, $Width - 3)
+    foreach ($segment in $Segments) {
+        if ($remaining -le 0) {
+            break
+        }
+
+        $text = [string]$segment.Text
+        if ($text.Length -gt $remaining) {
+            $text = if ($remaining -le 3) { $text.Substring(0, $remaining) } else { $text.Substring(0, $remaining - 3) + '...' }
+        }
+
+        Write-Host "$($segment.Color)$text$($script:C.Reset)" -NoNewline
+        $remaining -= $text.Length
+    }
+    Write-Host "$($script:C.EraseLn)"
+}
+
+function Write-NavFooter {
+    param(
+        [ValidateSet('Select', 'Start', 'Exit', 'Back')]
+        [string]$Mode = 'Select',
+        [string]$ShortcutText = ''
+    )
+
+    $segments = @()
+    if ($Mode -eq 'Select') {
+        $segments += @(
+            New-ShortcutSegment -Text "$([char]0x2191)$([char]0x2193)" -Color $script:C.White
+            New-ShortcutSegment -Text ' navigate   ' -Color $script:C.Dim
+            New-ShortcutSegment -Text 'Enter' -Color $script:C.OK
+            New-ShortcutSegment -Text ' = select   ' -Color $script:C.Dim
+        )
+        if (-not [string]::IsNullOrWhiteSpace($ShortcutText)) {
+            $segments += New-ShortcutSegment -Text "$ShortcutText   " -Color $script:C.Dim
+        }
+        $segments += @(
+            New-ShortcutSegment -Text 'Esc' -Color $script:C.Fail
+            New-ShortcutSegment -Text ' = exit' -Color $script:C.Dim
+        )
+    }
+    elseif ($Mode -eq 'Start') {
+        $segments += @(
+            New-ShortcutSegment -Text 'Enter' -Color $script:C.OK
+            New-ShortcutSegment -Text ' = start   ' -Color $script:C.Dim
+            New-ShortcutSegment -Text 'Esc' -Color $script:C.Fail
+            New-ShortcutSegment -Text ' = back' -Color $script:C.Dim
+        )
+    }
+    elseif ($Mode -eq 'Back') {
+        $segments += @(
+            New-ShortcutSegment -Text 'Enter' -Color $script:C.OK
+            New-ShortcutSegment -Text ' / ' -Color $script:C.Dim
+            New-ShortcutSegment -Text 'Esc' -Color $script:C.Fail
+            New-ShortcutSegment -Text ' = back' -Color $script:C.Dim
+        )
+    }
+    else {
+        $segments += @(
+            New-ShortcutSegment -Text 'Esc' -Color $script:C.Fail
+            New-ShortcutSegment -Text ' = exit' -Color $script:C.Dim
+        )
+    }
+
+    Write-ShortcutSegments -Segments $segments
 }
 
 function Lock-ViewportToWindow {
@@ -958,15 +1093,12 @@ function Write-Banner {
     $subtitleText = ' Repair + Update + Cache Cleanup'
     $updateStatus = Get-AppUpdateStatusPresentation
     $updateText = " Update: $($updateStatus.Label)"
-    $titlePad = [Math]::Max(0, $width - 2 - $titleText.Length)
-    $subtitlePad = [Math]::Max(0, $width - 2 - $subtitleText.Length)
-    $updatePad = [Math]::Max(0, $width - 2 - $updateText.Length)
 
     Write-Host ''
     Write-Host "$($script:C.H1)$([char]0x2554)$border$([char]0x2557)$($script:C.Reset)"
-    Write-Host "$($script:C.H1)$([char]0x2551)$($script:C.Bold)$($script:C.White)$titleText$($script:C.Reset)$(' ' * $titlePad)$($script:C.H1)$([char]0x2551)$($script:C.Reset)"
-    Write-Host "$($script:C.H1)$([char]0x2551)$($script:C.Dim)$subtitleText$($script:C.Reset)$(' ' * $subtitlePad)$($script:C.H1)$([char]0x2551)$($script:C.Reset)"
-    Write-Host "$($script:C.H1)$([char]0x2551)$($updateStatus.Color)$updateText$($script:C.Reset)$(' ' * $updatePad)$($script:C.H1)$([char]0x2551)$($script:C.Reset)"
+    Write-BorderedRow -Text $titleText -Color $script:C.White -Width $width -Bold
+    Write-BorderedRow -Text $subtitleText -Color $script:C.Dim -Width $width
+    Write-BorderedRow -Text $updateText -Color $updateStatus.Color -Width $width
     Write-Host "$($script:C.H1)$([char]0x255A)$border$([char]0x255D)$($script:C.Reset)"
     Write-Host ''
 }
@@ -1281,8 +1413,8 @@ function Invoke-MainMenu {
             Write-Section 'Runtime'
             $hostLabel = if (-not [string]::IsNullOrWhiteSpace($env:WT_SESSION)) { 'Windows Terminal' } else { 'PowerShell host' }
             $logLabel = if ([string]::IsNullOrWhiteSpace($script:LogFile)) { 'Unavailable' } else { $script:LogFile }
-            Write-Host "  $($script:C.H2)Host:$($script:C.Reset) $($script:C.White)$hostLabel$($script:C.Reset)"
-            Write-Host "  $($script:C.H2)Logs:$($script:C.Reset) $($script:C.Dim)$logLabel$($script:C.Reset)"
+            Write-UiTextLine -Text ("Host: {0}" -f $hostLabel) -Prefix '  ' -Color $script:C.White
+            Write-UiTextLine -Text ("Logs: {0}" -f $logLabel) -Prefix '  ' -Color $script:C.Dim
 
             Write-Host ''
             Write-Section 'Main Menu'
@@ -1297,18 +1429,19 @@ function Invoke-MainMenu {
                 }
 
                 if ($index -eq $script:MainMenuIndex) {
-                    Write-Host "$($script:C.SelBg)$($script:C.SelFg)$($script:C.Bold)  $([char]0x276F) $line $($script:C.Reset)$($script:C.EraseLn)"
-                    Write-Host "      $($script:C.White)$($item.Description)$($script:C.Reset)$($script:C.EraseLn)"
+                    $selectedLine = Get-UiText -Text "  $([char]0x276F) $line " -MaxLength ([Math]::Max(1, (Get-UiWidth) - 1))
+                    Write-Host "$($script:C.SelBg)$($script:C.SelFg)$($script:C.Bold)$selectedLine$($script:C.Reset)$($script:C.EraseLn)"
+                    Write-UiTextLine -Text $item.Description -Prefix '      ' -Color $script:C.White
                 }
                 else {
-                    Write-Host "    $($item.Color)$line$($script:C.Reset)$($script:C.EraseLn)"
-                    Write-Host "      $($script:C.Dim)$($item.Description)$($script:C.Reset)$($script:C.EraseLn)"
+                    Write-UiTextLine -Text $line -Prefix '    ' -Color $item.Color
+                    Write-UiTextLine -Text $item.Description -Prefix '      ' -Color $script:C.Dim
                 }
 
                 Write-Host ''
             }
 
-            Write-Host "  $($script:C.Dim)$([char]0x2191)$([char]0x2193) navigate   Enter = select   1..7 shortcuts   Esc = exit$($script:C.Reset)$($script:C.EraseLn)"
+            Write-NavFooter -Mode Select -ShortcutText '1..7 = shortcut'
             Write-Host "$($script:E)[J" -NoNewline
         }
         finally {
@@ -1357,34 +1490,40 @@ function Read-EnterOrEscChoice {
         [string]$EscLabel = 'Back to main menu'
     )
 
-    Write-Host '  Choices:' -ForegroundColor White
-    Write-Host ("  ✅ [Enter] {0}" -f $EnterLabel) -ForegroundColor Green
+    Write-Host "  $($script:C.White)Choices:$($script:C.Reset)"
+    Write-ShortcutSegments -Segments @(
+        New-ShortcutSegment -Text 'Enter' -Color $script:C.OK
+        New-ShortcutSegment -Text (" = {0}" -f $EnterLabel) -Color $script:C.White
+    )
     if (-not [string]::IsNullOrWhiteSpace($EnterDescription)) {
-        Write-Host ("           {0}" -f $EnterDescription) -ForegroundColor DarkGray
+        Write-UiTextLine -Text $EnterDescription -Prefix '        ' -Color $script:C.Dim
     }
-    Write-Host ("  ❌ [ESC]   {0}" -f $EscLabel) -ForegroundColor Red
+    Write-ShortcutSegments -Segments @(
+        New-ShortcutSegment -Text 'Esc' -Color $script:C.Fail
+        New-ShortcutSegment -Text (" = {0}" -f $EscLabel) -Color $script:C.White
+    )
     Write-Host ''
-    Write-Host '  Choice: ' -ForegroundColor White -NoNewline
+    Write-NavFooter -Mode Start
+    Write-Host ''
 
     while ($true) {
-        $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-        if ($key.VirtualKeyCode -eq 13) {
-            Write-Host 'Enter' -ForegroundColor DarkGray
+        $key = Read-ConsoleKey
+        if ($key.Key -eq 'Enter') {
             return 'ENTER'
         }
-        if ($key.VirtualKeyCode -eq 27) {
-            Write-Host 'ESC' -ForegroundColor DarkGray
+        if ($key.Key -eq 'Escape') {
             return 'ESC'
         }
+        if ($key.Key -eq 'ResizeEvent') {
+            continue
+        }
 
-        $char = [string]$key.Character
+        $char = [string]$key.KeyChar
         if ([string]::IsNullOrWhiteSpace($char)) {
             continue
         }
 
-        Write-Host $char
-        Write-Host '  Invalid choice. Use Enter or ESC.' -ForegroundColor Yellow
-        Write-Host '  Choice: ' -ForegroundColor Gray -NoNewline
+        Write-Host "  Invalid choice. Use Enter or Esc." -ForegroundColor Yellow
     }
 }
 
@@ -1436,8 +1575,8 @@ function Show-NativeFailureDetails {
     if ($Title -match 'DISM') {
         Write-Host '  DISM log: C:\Windows\Logs\DISM\dism.log' -ForegroundColor DarkGray
         Write-Host '  CBS log:  C:\Windows\Logs\CBS\CBS.log' -ForegroundColor DarkGray
-        Write-Host '  Hint: Error 3 / 0x80070003 often means a missing servicing path under WinSxS\Temp\InFlight.' -ForegroundColor DarkYellow
-        Write-Host '  Hint: stripped/custom Windows images may fail RestoreHealth even when SFC is clean.' -ForegroundColor DarkYellow
+        Write-UiTextLine -Text 'Hint: Error 3 / 0x80070003 often means a missing servicing path under WinSxS\Temp\InFlight.' -Prefix '  ' -Color $script:C.Warn
+        Write-UiTextLine -Text 'Hint: stripped/custom Windows images may fail RestoreHealth even when SFC is clean.' -Prefix '  ' -Color $script:C.Warn
         try {
             $summaryLines = @(& (Join-Path $PSScriptRoot 'ManageUpdates.ps1') -Action DismFailureSummary -SilentCaller)
             if ($summaryLines.Count -gt 0) {
@@ -1446,7 +1585,7 @@ function Show-NativeFailureDetails {
                 }
             }
             else {
-                Write-Host '  Recent servicing log lines: no summary output returned.' -ForegroundColor DarkGray
+                Write-UiTextLine -Text 'Recent servicing log lines: no summary output returned.' -Prefix '  ' -Color $script:C.Dim
             }
         }
         catch {
@@ -1546,17 +1685,17 @@ function Start-FullCleanupInWtPane {
 
 function Invoke-FullCleanup {
     Show-SubmenuHeader -Title 'Full Cleanup' -Subtitle 'SFC + DISM + InFlight'
-    Write-Host '  ⚠️  This will:' -ForegroundColor Yellow
-    Write-Host '      • Run the full SFC + DISM + WinSxS Temp sequence' -ForegroundColor Gray
-    Write-Host '      • Use the aggressive DISM /StartComponentCleanup /ResetBase path' -ForegroundColor Gray
-    Write-Host '      • Open a dedicated WT split pane when available' -ForegroundColor Gray
-    Write-Host '      • Take a while depending on image health and component-store size' -ForegroundColor Gray
+    Write-UiTextLine -Text 'This will:' -Prefix '  ' -Color $script:C.Warn
+    Write-UiTextLine -Text '- Run the full SFC + DISM + WinSxS Temp sequence' -Prefix '      ' -Color $script:C.Dim
+    Write-UiTextLine -Text '- Use the aggressive DISM /StartComponentCleanup /ResetBase path' -Prefix '      ' -Color $script:C.Dim
+    Write-UiTextLine -Text '- Open a dedicated WT split pane when available' -Prefix '      ' -Color $script:C.Dim
+    Write-UiTextLine -Text '- Take a while depending on image health and component-store size' -Prefix '      ' -Color $script:C.Dim
     Write-Host ''
     if ([string]::IsNullOrWhiteSpace($script:LogFile)) {
-        Write-Host '  Logs: unavailable (no writable log directory found)' -ForegroundColor DarkYellow
+        Write-UiTextLine -Text 'Logs: unavailable (no writable log directory found)' -Prefix '  ' -Color $script:C.Warn
     }
     else {
-        Write-Host ("  📄 Logs: {0}" -f $script:LogFile) -ForegroundColor Green
+        Write-UiTextLine -Text ("Logs: {0}" -f $script:LogFile) -Prefix '  ' -Color $script:C.OK
     }
     Write-Host ''
     $confirm = Read-EnterOrEscChoice -EnterLabel 'Start Full Cleanup' -EnterDescription 'Run the full servicing and cleanup flow now'
@@ -1567,18 +1706,18 @@ function Invoke-FullCleanup {
 
     if (Start-FullCleanupInWtPane) {
         Write-Host ''
-        Write-Host '  Full Cleanup opened in a Windows Terminal split pane.' -ForegroundColor Green
-        Write-Host '  Run and watch the native progress there. Close that pane when finished.' -ForegroundColor DarkGray
+        Write-UiTextLine -Text 'Full Cleanup opened in a Windows Terminal split pane.' -Prefix '  ' -Color $script:C.OK
+        Write-UiTextLine -Text 'Run and watch the native progress there. Close that pane when finished.' -Prefix '  ' -Color $script:C.Dim
         Wait-ReturnToMenu
         return
     }
 
     Show-SubmenuHeader -Title 'Full Cleanup' -Subtitle 'Running servicing and cleanup flow'
     if ([string]::IsNullOrWhiteSpace($script:LogFile)) {
-        Write-Host 'Logs disabled: no writable log directory was available.' -ForegroundColor DarkYellow
+        Write-UiTextLine -Text 'Logs disabled: no writable log directory was available.' -Prefix '  ' -Color $script:C.Warn
     }
     else {
-        Write-Host ("Logs saved to: {0}" -f $script:LogFile) -ForegroundColor DarkGray
+        Write-UiTextLine -Text ("Logs saved to: {0}" -f $script:LogFile) -Prefix '  ' -Color $script:C.Dim
     }
     Write-Host ''
 
@@ -1609,10 +1748,10 @@ function Invoke-FullCleanup {
 
 function Invoke-InFlightOnly {
     Show-SubmenuHeader -Title 'InFlight Cleanup Only' -Subtitle 'MoveFileEx + reboot-time deletion fallback'
-    Write-Host '  ⚠️  This will:' -ForegroundColor Yellow
-    Write-Host '      • Run the standalone WinSxS Temp / InFlight cleanup path' -ForegroundColor Gray
-    Write-Host '      • Delete what it can now and schedule locked leftovers for reboot-time removal' -ForegroundColor Gray
-    Write-Host '      • Skip the SFC / DISM stages completely' -ForegroundColor Gray
+    Write-UiTextLine -Text 'This will:' -Prefix '  ' -Color $script:C.Warn
+    Write-UiTextLine -Text '- Run the standalone WinSxS Temp / InFlight cleanup path' -Prefix '      ' -Color $script:C.Dim
+    Write-UiTextLine -Text '- Delete what it can now and schedule locked leftovers for reboot-time removal' -Prefix '      ' -Color $script:C.Dim
+    Write-UiTextLine -Text '- Skip the SFC / DISM stages completely' -Prefix '      ' -Color $script:C.Dim
     Write-Host ''
     $confirm = Read-EnterOrEscChoice -EnterLabel 'Run InFlight Cleanup only' -EnterDescription 'Start the standalone WinSxS Temp cleanup now'
     if ($confirm -eq 'ESC') {
