@@ -1,0 +1,21 @@
+Windows Registry Editor Version 5.00
+
+; Block the buggy AMD Packaged COM Shell Extension (that shows the blank icon)
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked]
+"{FDADFEE3-02D1-4E7C-A511-380F4C98D73B}"="AMD Software"
+
+; Add static Context Menu item for Desktop Background
+[HKEY_CURRENT_USER\Software\Classes\DesktopBackground\Shell\AMDSoftware]
+"MUIVerb"="AMD Software: Adrenalin Edition"
+"Icon"="C:\\Program Files\\AMD\\CIM\\Bin64\\AMDSoftwareConsumer.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\DesktopBackground\Shell\AMDSoftware\Command]
+@="\"C:\\Program Files\\AMD\\CNext\\CNext\\RadeonSoftware.exe\""
+
+; Add static Context Menu item for Directory Background
+[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\AMDSoftware]
+"MUIVerb"="AMD Software: Adrenalin Edition"
+"Icon"="C:\\Program Files\\AMD\\CIM\\Bin64\\AMDSoftwareConsumer.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\AMDSoftware\Command]
+@="\"C:\\Program Files\\AMD\\CNext\\CNext\\RadeonSoftware.exe\""

@@ -2,6 +2,12 @@
 
 All notable user-facing changes for `SystemCleanup` are recorded here.
 
+## [2026-06-25]
+
+### Added
+
+- Added `AMD_Context_Menu_Fix.reg` to easily fix the generic blank icon issue for the "AMD Software: Adrenalin Edition" context menu on Windows 11. It works by blocking the buggy Packaged COM extension and adding custom static context menu entries with the official AMD Software icon and executable.
+
 ## [2026-05-19]
 
 ### Changed
