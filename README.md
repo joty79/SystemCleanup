@@ -49,7 +49,7 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 │  ① Reset TrustedInstaller service                          │
 │  ② SFC /scannow  (initial scan)                            │
 │  ③ DISM AnalyzeComponentStore                               │
-│  ④ DISM RestoreHealth                                       │
+│  ④ DISM RestoreHealth /LimitAccess (local source only)     │
 │  ⑤ DISM StartComponentCleanup /ResetBase                   │
 │  ⑥ CleanInFlight.ps1  (WinSxS\Temp deep clean)             │
 │  ⑦ Reset TrustedInstaller + SFC /scannow  (verification)   │
@@ -59,13 +59,19 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. The main `Full Cleanup` flow now uses `dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase`, so superseded component versions are reclaimed immediately instead of waiting for the plain 30-day cleanup window. After any option completes, the tool **returns to the main menu** — only `ESC` exits the CMD launcher.
+Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. Before starting, Full Cleanup refuses to run while Windows has a pending restart, pending servicing packages, `pending.xml`, or an active `DISM` / `DismHost` / `TiWorker` process.
+
+The RestoreHealth stage uses `/LimitAccess`, so it can repair from the local component store but cannot silently start a Windows Update/FOD download. If the local repair source is insufficient, that step fails visibly and the entire flow stops immediately; `/ResetBase`, `CleanInFlight`, and final verification are not started after a required-step failure.
+
+The main `Full Cleanup` flow uses `dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase`, so superseded component versions are reclaimed immediately instead of waiting for the plain 30-day cleanup window. After any option completes, the tool **returns to the main menu** — only `ESC` exits the CMD launcher.
 
 The action-oriented main-menu entries now open a confirmation panel first, so entering `[1]` / `[2]` / `[3]` / `[4]` / `[7]` does not immediately start work. `Windows Update Manager` `[5]` still opens directly because it is its own submenu, and `Last DISM/CBS Failure Details` `[6]` opens directly because it is read-only info. The primary action pattern is `Enter = start`, `ESC = back to main menu`.
 
 `/ResetBase` is intentionally more aggressive: after that step, older superseded component versions are no longer uninstallable.
 
 When a `DISM` step fails, the launcher also prints the native exit code, points directly to `C:\Windows\Logs\DISM\dism.log` and `C:\Windows\Logs\CBS\CBS.log`, and shows a short ranked summary of the most relevant recent `DISM` / `CBS` clues in a compact format that remains readable in narrow Windows Terminal panes.
+
+Full Cleanup never force-terminates Windows servicing automatically. A blocked preflight or failed step is reported as `FULL CLEANUP STOPPED SAFELY`, and no later cleanup stage is launched.
 
 Main-menu option `[4]` shows the live Delivery Optimization state directly in the gray description line and lets you clear the Delivery Optimization cache while safely forcing `DownloadMode = 0 (CdnOnly)` so peer-to-peer sharing stays off.
 

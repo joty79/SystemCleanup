@@ -2,6 +2,17 @@
 
 All notable user-facing changes for `SystemCleanup` are recorded here.
 
+## [2026-07-15]
+
+### Changed
+
+- Bumped the app metadata version to `1.0.4` for the Full Cleanup servicing-safety fix.
+- Changed Full Cleanup `RestoreHealth` to use `/LimitAccess`, preventing hidden Windows Update/FOD downloads from continuing behind the following `/ResetBase` stage.
+- Added a servicing preflight that blocks Full Cleanup when Windows has a pending restart, pending packages, `pending.xml`, or an active `DISM`, `DismHost`, or `TiWorker` process.
+- Changed all Full Cleanup entrypoints to stop immediately after a failed required step, so `/ResetBase`, `CleanInFlight`, and final SFC cannot continue after an earlier failure.
+- Fixed the WT batch runner to preserve and return the native failure code through the safe-stop path instead of logging or returning a false zero.
+- Added an explicit `FULL CLEANUP STOPPED SAFELY` result and durable logging for blocked/aborted runs.
+
 ## [2026-06-25]
 
 ### Added

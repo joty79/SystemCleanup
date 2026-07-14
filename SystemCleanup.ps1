@@ -11,7 +11,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $script:LogDir = ''
 $script:LogFile = ''
 $script:AppName = 'SystemCleanup'
-$script:AppVersion = '1.0.3'
+$script:AppVersion = '1.0.4'
 $script:AppGitHubRepo = 'joty79/SystemCleanup'
 $script:AppMetadataPath = Join-Path $PSScriptRoot 'app-metadata.json'
 $script:StatePath = Join-Path $PSScriptRoot 'state'
@@ -1282,6 +1282,46 @@ function Test-IsAdmin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Get-FullCleanupBlockers {
+    $blockers = [System.Collections.Generic.List[string]]::new()
+
+    $pendingChecks = @(
+        [pscustomobject]@{
+            Path    = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'
+            Message = 'Windows servicing requires a restart.'
+        }
+        [pscustomobject]@{
+            Path    = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackagesPending'
+            Message = 'Windows servicing has pending packages.'
+        }
+        [pscustomobject]@{
+            Path    = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
+            Message = 'Windows Update requires a restart.'
+        }
+    )
+
+    foreach ($pendingCheck in $pendingChecks) {
+        if (Test-Path -LiteralPath $pendingCheck.Path) {
+            [void]$blockers.Add($pendingCheck.Message)
+        }
+    }
+
+    $pendingXmlPath = Join-Path $env:WINDIR 'WinSxS\pending.xml'
+    if (Test-Path -LiteralPath $pendingXmlPath -PathType Leaf) {
+        [void]$blockers.Add('Windows has pending servicing operations.')
+    }
+
+    $servicingProcesses = @(
+        Get-Process -Name 'dism', 'DismHost', 'TiWorker' -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty ProcessName -Unique
+    )
+    if ($servicingProcesses.Count -gt 0) {
+        [void]$blockers.Add(('Another servicing process is active: {0}.' -f ($servicingProcesses -join ', ')))
+    }
+
+    return @($blockers)
+}
+
 function Start-PreferredHost {
     $scriptPath = $PSCommandPath
     $wtCommand = Get-Command wt.exe -ErrorAction SilentlyContinue
@@ -1711,6 +1751,8 @@ function Invoke-FullCleanup {
     Write-UiTextLine -Text 'This will:' -Prefix '  ' -Color $script:C.Warn
     Write-UiTextLine -Text '- Run the full SFC + DISM + WinSxS Temp sequence' -Prefix '      ' -Color $script:C.Dim
     Write-UiTextLine -Text '- Use the aggressive DISM /StartComponentCleanup /ResetBase path' -Prefix '      ' -Color $script:C.Dim
+    Write-UiTextLine -Text '- Keep RestoreHealth local-only so it cannot start a hidden Windows Update download' -Prefix '      ' -Color $script:C.Dim
+    Write-UiTextLine -Text '- Stop the flow immediately when any required step fails' -Prefix '      ' -Color $script:C.Dim
     Write-UiTextLine -Text '- Open a dedicated WT split pane when available' -Prefix '      ' -Color $script:C.Dim
     Write-UiTextLine -Text '- Take a while depending on image health and component-store size' -Prefix '      ' -Color $script:C.Dim
     Write-Host ''
@@ -1720,11 +1762,37 @@ function Invoke-FullCleanup {
     else {
         Write-UiTextLine -Text ("Logs: {0}" -f $script:LogFile) -Prefix '  ' -Color $script:C.OK
     }
+
+    $fullCleanupBlockers = @(Get-FullCleanupBlockers)
+    if ($fullCleanupBlockers.Count -gt 0) {
+        Write-Host ''
+        Write-UiTextLine -Text 'Full Cleanup is blocked until servicing is idle:' -Prefix '  ' -Color $script:C.Fail
+        foreach ($fullCleanupBlocker in $fullCleanupBlockers) {
+            Write-UiTextLine -Text ("- {0}" -f $fullCleanupBlocker) -Prefix '      ' -Color $script:C.Warn
+        }
+        Write-UiTextLine -Text 'Restart Windows normally if required, wait for servicing to finish, then retry.' -Prefix '  ' -Color $script:C.Dim
+        Write-Log -Level 'WARN' -Message ("BLOCKED: Full Cleanup preflight - {0}" -f ($fullCleanupBlockers -join ' '))
+        Wait-ReturnToMenu
+        return
+    }
+
     Write-Host ''
     $confirm = Read-EnterOrEscChoice -EnterLabel 'Start Full Cleanup' -EnterDescription 'Run the full servicing and cleanup flow now'
     if ($confirm -eq 'ESC') {
         Write-Host '  Cancelled.' -ForegroundColor DarkGray
         return $script:SkipReturnToMenuToken
+    }
+
+    $lateFullCleanupBlockers = @(Get-FullCleanupBlockers)
+    if ($lateFullCleanupBlockers.Count -gt 0) {
+        Write-Host ''
+        Write-UiTextLine -Text 'Servicing became active while this screen was open. Full Cleanup was not started.' -Prefix '  ' -Color $script:C.Fail
+        foreach ($lateFullCleanupBlocker in $lateFullCleanupBlockers) {
+            Write-UiTextLine -Text ("- {0}" -f $lateFullCleanupBlocker) -Prefix '      ' -Color $script:C.Warn
+        }
+        Write-Log -Level 'WARN' -Message ("BLOCKED: Full Cleanup late preflight - {0}" -f ($lateFullCleanupBlockers -join ' '))
+        Wait-ReturnToMenu
+        return
     }
 
     if (Start-FullCleanupInWtPane) {
@@ -1745,10 +1813,33 @@ function Invoke-FullCleanup {
     Write-Host ''
 
     Reset-TrustedInstaller
-    [void](Invoke-CmdNativeStep -Title 'SFC (Initial Scan)' -CommandLine 'sfc.exe /scannow')
-    [void](Invoke-CmdNativeStep -Title 'DISM AnalyzeComponentStore' -CommandLine 'dism.exe /Online /Cleanup-Image /AnalyzeComponentStore')
-    [void](Invoke-CmdNativeStep -Title 'DISM RestoreHealth' -CommandLine 'dism.exe /Online /Cleanup-Image /RestoreHealth')
-    [void](Invoke-CmdNativeStep -Title 'DISM StartComponentCleanup /ResetBase' -CommandLine 'dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase')
+    $stepExitCode = Invoke-CmdNativeStep -Title 'SFC (Initial Scan)' -CommandLine 'sfc.exe /scannow'
+    if ($stepExitCode -ne 0) {
+        Write-UiTextLine -Text 'Full Cleanup stopped safely. No later cleanup steps were started.' -Prefix '  ' -Color $script:C.Fail
+        Wait-ReturnToMenu
+        return
+    }
+
+    $stepExitCode = Invoke-CmdNativeStep -Title 'DISM AnalyzeComponentStore' -CommandLine 'dism.exe /Online /Cleanup-Image /AnalyzeComponentStore'
+    if ($stepExitCode -ne 0) {
+        Write-UiTextLine -Text 'Full Cleanup stopped safely. No later cleanup steps were started.' -Prefix '  ' -Color $script:C.Fail
+        Wait-ReturnToMenu
+        return
+    }
+
+    $stepExitCode = Invoke-CmdNativeStep -Title 'DISM RestoreHealth (local source only)' -CommandLine 'dism.exe /Online /Cleanup-Image /RestoreHealth /LimitAccess'
+    if ($stepExitCode -ne 0) {
+        Write-UiTextLine -Text 'Full Cleanup stopped safely. Windows Update was not contacted.' -Prefix '  ' -Color $script:C.Fail
+        Wait-ReturnToMenu
+        return
+    }
+
+    $stepExitCode = Invoke-CmdNativeStep -Title 'DISM StartComponentCleanup /ResetBase' -CommandLine 'dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase'
+    if ($stepExitCode -ne 0) {
+        Write-UiTextLine -Text 'Full Cleanup stopped safely. No later cleanup steps were started.' -Prefix '  ' -Color $script:C.Fail
+        Wait-ReturnToMenu
+        return
+    }
 
     Write-Host ''
     Write-Host '=== Cleaning WinSxS Temp ===' -ForegroundColor Cyan

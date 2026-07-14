@@ -165,24 +165,34 @@ echo.
 echo %cGray%Logs saved to: %LogFile%%cReset%
 echo.
 
+call :CheckFullCleanupPreflight
+if errorlevel 1 goto :AbortFullCleanup
+
 REM Phase 1: SFC
 call :ResetService
 call :RunStep " SFC (Initial Scan)" "sfc /scannow"
 set "SFC_EXIT=%EXITCODE%"
+if not "!EXITCODE!"=="0" goto :AbortFullCleanup
 
 REM Phase 2: DISM Core Maintenance
 call :RunStep " DISM AnalyzeComponentStore" "dism.exe /Online /Cleanup-Image /AnalyzeComponentStore"
-call :RunStep " DISM RestoreHealth" "dism.exe /Online /Cleanup-Image /RestoreHealth"
+if not "!EXITCODE!"=="0" goto :AbortFullCleanup
+call :RunStep " DISM RestoreHealth (local source only)" "dism.exe /Online /Cleanup-Image /RestoreHealth /LimitAccess"
+if not "!EXITCODE!"=="0" goto :AbortFullCleanup
 call :RunStep " DISM StartComponentCleanup /ResetBase" "dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase"
+if not "!EXITCODE!"=="0" goto :AbortFullCleanup
 
 REM Phase 3: InFlight Call
 echo.
 echo %cCyan%=== Cleaning WinSxS Temp ===%cReset%
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0CleanInFlight.ps1" -SilentCaller
+set "EXITCODE=!ERRORLEVEL!"
+if not "!EXITCODE!"=="0" goto :AbortFullCleanup
 
 REM Phase 4: Final Verification
 call :ResetService
 call :RunStep " SFC (Final Verification)" "sfc /scannow"
+if not "!EXITCODE!"=="0" goto :AbortFullCleanup
 
 echo.
 echo %cGreen%==========================================%cReset%
@@ -193,6 +203,21 @@ echo %cYellow% Status Legend:%cReset%
 echo   %cGreen%  +++   OK: No issues found%cReset%             %cGray%(Clean)%cReset%
 echo   %cYellow%  [~]   FIXED: Repaired issues%cReset%         %cGray%(Fixed)%cReset%
 echo   %cRed%  [X]   FAILED: Could not repair%cReset%        %cGray%(Failed)%cReset%
+echo.
+pause
+goto :Menu
+
+:AbortFullCleanup
+if not defined EXITCODE set "EXITCODE=1"
+echo.
+echo %cRed%==========================================%cReset%
+echo    %cBold%  FULL CLEANUP STOPPED SAFELY%cReset%
+echo %cRed%==========================================%cReset%
+echo.
+echo   %cYellow%A required step failed or servicing was already pending.%cReset%
+echo   %cWhite%No later cleanup steps were started.%cReset%
+echo   %cGray%Resolve the reported condition before running Full Cleanup again.%cReset%
+echo [%date% %time%] STOPPED: Full Cleanup aborted safely - Code: !EXITCODE! >> "%LogFile%"
 echo.
 pause
 goto :Menu
@@ -294,6 +319,34 @@ REM ---------------------------------------------------------
 REM HELPER FUNCTIONS
 REM ---------------------------------------------------------
 
+:CheckFullCleanupPreflight
+set "PREFLIGHT_BLOCKED=0"
+echo %cGray%Checking pending restart and servicing state...%cReset%
+
+reg.exe query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending" >nul 2>&1
+if not errorlevel 1 set "PREFLIGHT_BLOCKED=1"
+reg.exe query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackagesPending" >nul 2>&1
+if not errorlevel 1 set "PREFLIGHT_BLOCKED=1"
+reg.exe query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" >nul 2>&1
+if not errorlevel 1 set "PREFLIGHT_BLOCKED=1"
+if exist "%WINDIR%\WinSxS\pending.xml" set "PREFLIGHT_BLOCKED=1"
+
+for %%P in (dism.exe DismHost.exe TiWorker.exe) do (
+    tasklist.exe /FI "IMAGENAME eq %%P" /NH 2>nul | find.exe /I "%%P" >nul
+    if not errorlevel 1 set "PREFLIGHT_BLOCKED=1"
+)
+
+if "!PREFLIGHT_BLOCKED!"=="1" (
+    set "EXITCODE=20"
+    echo   %cYellow%[BLOCKED] Full Cleanup is blocked because Windows has pending or active servicing.%cReset%
+    echo   %cGray%Restart Windows normally, wait for servicing to become idle, then retry.%cReset%
+    echo [%date% %time%] BLOCKED: Full Cleanup preflight detected pending or active servicing >> "%LogFile%"
+    exit /b 20
+)
+
+echo   %cGreen%+++   OK: Servicing preflight passed.%cReset%
+exit /b 0
+
 :ResetService
 echo.
 echo  %cGray%  Refreshing TrustedInstaller Service...%cReset%
@@ -337,19 +390,19 @@ REM Default
 echo.
 echo    %cGreen%+++   OK: Step completed.%cReset%
 echo [%date% %time%] SUCCESS: !StepTitle! >> "%LogFile%"
-exit /b
+exit /b 0
 
 :ResClean
 echo.
 echo    %cGreen%+++   OK: No issues found.%cReset%
 echo [%date% %time%] SUCCESS: !StepTitle! - Clean >> "%LogFile%"
-exit /b
+exit /b 0
 
 :ResRepaired
 echo.
 echo    %cYellow%[~]   FIXED: Found issues and repaired them.%cReset%
 echo [%date% %time%] REPAIRED: !StepTitle! - Issues found and fixed >> "%LogFile%"
-exit /b
+exit /b 0
 
 :ResFailed
 echo.
@@ -364,4 +417,4 @@ if not errorlevel 1 (
     echo    %cYellow%Hint: stripped/custom Windows images may fail RestoreHealth even when SFC is clean.%cReset%
     "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action DismFailureSummary -SilentCaller
 )
-exit /b
+exit /b !EXITCODE!

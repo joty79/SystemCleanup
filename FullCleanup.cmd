@@ -27,19 +27,30 @@ if not "%LOGFILE%"=="" (
   echo.
 )
 
+call :CheckServicingPreflight
+if errorlevel 1 goto :AbortCleanup
+
 call :ResetService
 
 call :RunStep " SFC (Initial Scan)" "sfc.exe /scannow"
+if errorlevel 1 goto :AbortCleanup
 call :RunStep " DISM AnalyzeComponentStore" "dism.exe /Online /Cleanup-Image /AnalyzeComponentStore"
-call :RunStep " DISM RestoreHealth" "dism.exe /Online /Cleanup-Image /RestoreHealth"
+if errorlevel 1 goto :AbortCleanup
+call :RunStep " DISM RestoreHealth (local source only)" "dism.exe /Online /Cleanup-Image /RestoreHealth /LimitAccess"
+if errorlevel 1 goto :AbortCleanup
 call :RunStep " DISM StartComponentCleanup /ResetBase" "dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase"
+if errorlevel 1 goto :AbortCleanup
 
 echo.
 echo %cCyan%=== Cleaning WinSxS Temp ===%cReset%
 pwsh.exe -NoProfile -ExecutionPolicy Bypass -File "%SCRIPTROOT%CleanInFlight.ps1" -SilentCaller
-if errorlevel 1 (
+set "CLEANEXIT=!ERRORLEVEL!"
+if not "!CLEANEXIT!"=="0" (
   echo.
   echo   %cRed%[X]   FAILED: WinSxS Temp cleanup returned an error.%cReset%
+  set "EXITCODE=!CLEANEXIT!"
+  call :WriteLog "FAILED: WinSxS Temp cleanup - Code: !CLEANEXIT!"
+  goto :AbortCleanup
 ) else (
   echo.
   echo   %cGreen%+++   OK: Step completed.%cReset%
@@ -48,6 +59,7 @@ if errorlevel 1 (
 call :ResetService
 
 call :RunStep " SFC (Final Verification)" "sfc.exe /scannow"
+if errorlevel 1 goto :AbortCleanup
 
 echo.
 echo %cGreen%==========================================%cReset%
@@ -61,6 +73,63 @@ echo   %cRed%  [X]   FAILED: Found issues but could NOT fix them%cReset% %cGray%
 echo.
 echo  Press any key to close this pane...
 pause >nul
+exit /b 0
+
+:AbortCleanup
+if not defined EXITCODE set "EXITCODE=1"
+echo.
+echo %cRed%==========================================%cReset%
+echo    %cBold%  FULL CLEANUP STOPPED SAFELY%cReset%
+echo %cRed%==========================================%cReset%
+echo.
+echo   %cYellow%A required step failed or servicing was already pending.%cReset%
+echo   %cWhite%No later cleanup steps were started.%cReset%
+echo   %cGray%Resolve the reported condition before running Full Cleanup again.%cReset%
+call :WriteLog "STOPPED: Full Cleanup aborted safely - Code: !EXITCODE!"
+echo.
+echo  Press any key to close this pane...
+pause >nul
+exit /b !EXITCODE!
+
+:CheckServicingPreflight
+set "PREFLIGHT_BLOCKED=0"
+echo %cGray%Checking pending restart and servicing state...%cReset%
+
+reg.exe query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending" >nul 2>&1
+if not errorlevel 1 (
+  echo   %cYellow%[BLOCKED] Windows servicing has a pending restart.%cReset%
+  set "PREFLIGHT_BLOCKED=1"
+)
+reg.exe query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackagesPending" >nul 2>&1
+if not errorlevel 1 (
+  echo   %cYellow%[BLOCKED] Windows servicing has pending packages.%cReset%
+  set "PREFLIGHT_BLOCKED=1"
+)
+reg.exe query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" >nul 2>&1
+if not errorlevel 1 (
+  echo   %cYellow%[BLOCKED] Windows Update requires a restart.%cReset%
+  set "PREFLIGHT_BLOCKED=1"
+)
+if exist "%WINDIR%\WinSxS\pending.xml" (
+  echo   %cYellow%[BLOCKED] Windows has pending servicing operations.%cReset%
+  set "PREFLIGHT_BLOCKED=1"
+)
+
+for %%P in (dism.exe DismHost.exe TiWorker.exe) do (
+  tasklist.exe /FI "IMAGENAME eq %%P" /NH 2>nul | find.exe /I "%%P" >nul
+  if not errorlevel 1 (
+    echo   %cYellow%[BLOCKED] Another servicing process is active: %%P%cReset%
+    set "PREFLIGHT_BLOCKED=1"
+  )
+)
+
+if "!PREFLIGHT_BLOCKED!"=="1" (
+  set "EXITCODE=20"
+  call :WriteLog "BLOCKED: Full Cleanup preflight detected pending or active servicing"
+  exit /b 20
+)
+
+echo   %cGreen%+++   OK: Servicing preflight passed.%cReset%
 exit /b 0
 
 :ResetService
@@ -78,6 +147,7 @@ echo.
 call :WriteLog "STARTING: !STEPTITLE!"
 call %~2
 set "STEPEXIT=!ERRORLEVEL!"
+set "EXITCODE=!STEPEXIT!"
 if "!STEPEXIT!"=="0" (
   echo.
   echo    %cGreen%+++   OK: No issues found.%cReset%
