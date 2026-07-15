@@ -37,7 +37,14 @@ if errorlevel 1 goto :AbortCleanup
 call :RunStep " DISM AnalyzeComponentStore" "dism.exe /Online /Cleanup-Image /AnalyzeComponentStore"
 if errorlevel 1 goto :AbortCleanup
 call :RunStep " DISM RestoreHealth (local source only)" "dism.exe /Online /Cleanup-Image /RestoreHealth /LimitAccess"
-if errorlevel 1 goto :AbortCleanup
+if errorlevel 1 (
+  set "LOCALREPAIREXIT=!EXITCODE!"
+  call :OfferRestoreHealthRepair
+  if "!REPAIRFALLBACKEXIT!"=="0" goto :RepairCompleted
+  if not "!REPAIRFALLBACKEXIT!"=="2" set "EXITCODE=!REPAIRFALLBACKEXIT!"
+  if "!REPAIRFALLBACKEXIT!"=="2" set "EXITCODE=!LOCALREPAIREXIT!"
+  goto :AbortCleanup
+)
 call :RunStep " DISM StartComponentCleanup /ResetBase" "dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase"
 if errorlevel 1 goto :AbortCleanup
 
@@ -70,6 +77,22 @@ echo %cYellow% Status Legend:%cReset%
 echo   %cGreen%  +++   OK: No issues found%cReset%             %cGray%(Clean)%cReset%
 echo   %cYellow%  [~]   FIXED: Found issues and repaired them%cReset% %cGray%(Fixed)%cReset%
 echo   %cRed%  [X]   FAILED: Found issues but could NOT fix them%cReset% %cGray%(Failed)%cReset%
+echo.
+echo  Press any key to close this pane...
+pause >nul
+exit /b 0
+
+:RepairCompleted
+set "EXITCODE=0"
+echo.
+echo %cGreen%==========================================%cReset%
+echo    %cBold%  REPAIR COMPLETED - RESTART REQUIRED%cReset%
+echo %cGreen%==========================================%cReset%
+echo.
+echo   %cWhite%The Windows image repair completed successfully.%cReset%
+echo   %cYellow%Full Cleanup stopped before /ResetBase and later cleanup stages.%cReset%
+echo   %cGray%Restart Windows normally, then run Full Cleanup again.%cReset%
+call :WriteLog "REPAIRED: RestoreHealth fallback completed - restart required"
 echo.
 echo  Press any key to close this pane...
 pause >nul
@@ -138,6 +161,15 @@ echo  %cGray%  Refreshing TrustedInstaller Service...%cReset%
 net.exe stop trustedinstaller >nul 2>&1
 ver >nul
 exit /b
+
+:OfferRestoreHealthRepair
+echo.
+echo %cYellow%The local component store could not complete RestoreHealth.%cReset%
+echo %cWhite%A verified ISO repair source can be used, or Windows Update can be allowed explicitly.%cReset%
+pwsh.exe -NoProfile -ExecutionPolicy Bypass -File "%SCRIPTROOT%ManageUpdates.ps1" -Action RepairRestoreHealth -SilentCaller
+set "REPAIRFALLBACKEXIT=!ERRORLEVEL!"
+call :WriteLog "RestoreHealth fallback returned code !REPAIRFALLBACKEXIT!"
+exit /b !REPAIRFALLBACKEXIT!
 
 :RunStep
 set "STEPTITLE=%~1"

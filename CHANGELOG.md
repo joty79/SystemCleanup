@@ -6,6 +6,11 @@ All notable user-facing changes for `SystemCleanup` are recorded here.
 
 ### Changed
 
+- Bumped the app metadata version to `1.0.5` for the verified ISO repair fallback.
+- Added a guided RestoreHealth fallback after the local `/LimitAccess` attempt fails: verified ISO repair is the recommended default, Windows Update requires an explicit `W` choice, and `ESC` stops safely.
+- Added strict ISO-to-live-Windows matching for edition, installation type, architecture, exact build/revision, and base language by reading `install.wim` / `install.esd` metadata instead of trusting the ISO filename.
+- Added read-only ISO mounting at the first free drive letter from `Z:` downward, remembered verified-source state, and ownership-aware dismount behavior.
+- Changed successful fallback repair handling to stop before `/ResetBase` and require a normal restart plus a fresh Full Cleanup run.
 - Bumped the app metadata version to `1.0.4` for the Full Cleanup servicing-safety fix.
 - Changed Full Cleanup `RestoreHealth` to use `/LimitAccess`, preventing hidden Windows Update/FOD downloads from continuing behind the following `/ResetBase` stage.
 - Added a servicing preflight that blocks Full Cleanup when Windows has a pending restart, pending packages, `pending.xml`, or an active `DISM`, `DismHost`, or `TiWorker` process.

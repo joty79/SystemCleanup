@@ -178,7 +178,14 @@ REM Phase 2: DISM Core Maintenance
 call :RunStep " DISM AnalyzeComponentStore" "dism.exe /Online /Cleanup-Image /AnalyzeComponentStore"
 if not "!EXITCODE!"=="0" goto :AbortFullCleanup
 call :RunStep " DISM RestoreHealth (local source only)" "dism.exe /Online /Cleanup-Image /RestoreHealth /LimitAccess"
-if not "!EXITCODE!"=="0" goto :AbortFullCleanup
+if not "!EXITCODE!"=="0" (
+    set "LOCALREPAIREXIT=!EXITCODE!"
+    call :OfferRestoreHealthRepair
+    if "!REPAIRFALLBACKEXIT!"=="0" goto :RepairCompleted
+    if not "!REPAIRFALLBACKEXIT!"=="2" set "EXITCODE=!REPAIRFALLBACKEXIT!"
+    if "!REPAIRFALLBACKEXIT!"=="2" set "EXITCODE=!LOCALREPAIREXIT!"
+    goto :AbortFullCleanup
+)
 call :RunStep " DISM StartComponentCleanup /ResetBase" "dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase"
 if not "!EXITCODE!"=="0" goto :AbortFullCleanup
 
@@ -203,6 +210,21 @@ echo %cYellow% Status Legend:%cReset%
 echo   %cGreen%  +++   OK: No issues found%cReset%             %cGray%(Clean)%cReset%
 echo   %cYellow%  [~]   FIXED: Repaired issues%cReset%         %cGray%(Fixed)%cReset%
 echo   %cRed%  [X]   FAILED: Could not repair%cReset%        %cGray%(Failed)%cReset%
+echo.
+pause
+goto :Menu
+
+:RepairCompleted
+set "EXITCODE=0"
+echo.
+echo %cGreen%==========================================%cReset%
+echo    %cBold%  REPAIR COMPLETED - RESTART REQUIRED%cReset%
+echo %cGreen%==========================================%cReset%
+echo.
+echo   %cWhite%The Windows image repair completed successfully.%cReset%
+echo   %cYellow%Full Cleanup stopped before /ResetBase and later cleanup stages.%cReset%
+echo   %cGray%Restart Windows normally, then run Full Cleanup again.%cReset%
+echo [%date% %time%] REPAIRED: RestoreHealth fallback completed - restart required >> "%LogFile%"
 echo.
 pause
 goto :Menu
@@ -353,6 +375,15 @@ echo  %cGray%  Refreshing TrustedInstaller Service...%cReset%
 net stop trustedinstaller >nul 2>&1
 ver > nul
 exit /b
+
+:OfferRestoreHealthRepair
+echo.
+echo %cYellow%The local component store could not complete RestoreHealth.%cReset%
+echo %cWhite%A verified ISO repair source can be used, or Windows Update can be allowed explicitly.%cReset%
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0ManageUpdates.ps1" -Action RepairRestoreHealth -SilentCaller
+set "REPAIRFALLBACKEXIT=!ERRORLEVEL!"
+echo [%date% %time%] RestoreHealth fallback returned code !REPAIRFALLBACKEXIT! >> "%LogFile%"
+exit /b !REPAIRFALLBACKEXIT!
 
 :RunStep
 set "StepTitle=%~1"

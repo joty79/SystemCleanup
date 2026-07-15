@@ -4,16 +4,19 @@
 
 param(
     [switch]$SilentCaller,
-    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus', 'DeliveryOptimizationCleanup', 'DeliveryOptimizationStatus', 'ToolSelfUpdate', 'ToolSelfUpdateStatus', 'ReadMainMenuChoice', 'DismFailureSummary', 'DismFailureSummaryFull')]
-    [string]$Action = 'Menu'
+    [ValidateSet('Menu', 'LiveCleanup', 'WindowsUpdateCleanup', 'LiveCleanupStatus', 'DeliveryOptimizationCleanup', 'DeliveryOptimizationStatus', 'ToolSelfUpdate', 'ToolSelfUpdateStatus', 'ReadMainMenuChoice', 'DismFailureSummary', 'DismFailureSummaryFull', 'RepairSourceStatus', 'RepairRestoreHealth')]
+    [string]$Action = 'Menu',
+    [AllowEmptyString()]
+    [string]$RepairIsoPath = ''
 )
 
 $script:SkipReturnToMenuToken = '__SYSTEMCLEANUP_SKIP_RETURN_TO_MENU__'
 $script:RelaunchAndExitToken = '__SYSTEMCLEANUP_RELAUNCH_AND_EXIT__'
 $script:AppName = 'SystemCleanup'
-$script:AppVersion = '1.0.4'
+$script:AppVersion = '1.0.5'
 $script:AppMetadataPath = Join-Path $PSScriptRoot 'app-metadata.json'
 $script:AppUpdateStatusCachePath = Join-Path $PSScriptRoot 'state\app-update-status.json'
+$script:RepairSourceStatePath = Join-Path $PSScriptRoot 'state\repair-source.json'
 $script:E = [char]27
 $script:Ui = @{
     H1      = "$($script:E)[38;2;90;180;240m"
@@ -299,6 +302,449 @@ function Show-SystemCleanupHeader {
 }
 
 Initialize-SystemCleanupMetadata
+
+# ─────────────────────────────────────────────
+# 🔵 MATCHED ISO REPAIR SOURCE
+# ─────────────────────────────────────────────
+function Get-RepairArchitectureName {
+    param([int]$Architecture)
+
+    switch ($Architecture) {
+        0 { return 'x86' }
+        5 { return 'arm' }
+        9 { return 'x64' }
+        12 { return 'arm64' }
+        default { return "unknown ($Architecture)" }
+    }
+}
+
+function Get-LiveRepairTarget {
+    $currentVersion = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction Stop
+    $nativeArchitecture = if (-not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)) {
+        $env:PROCESSOR_ARCHITEW6432
+    }
+    else {
+        $env:PROCESSOR_ARCHITECTURE
+    }
+    $architecture = switch ($nativeArchitecture.ToUpperInvariant()) {
+        'AMD64' { 'x64' }
+        'ARM64' { 'arm64' }
+        'X86' { 'x86' }
+        default { "unknown ($nativeArchitecture)" }
+    }
+
+    $languageValues = Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\Language' -ErrorAction Stop
+    $baseLanguage = try {
+        $languageId = [Convert]::ToInt32([string]$languageValues.InstallLanguage, 16)
+        [System.Globalization.CultureInfo]::GetCultureInfo($languageId).Name
+    }
+    catch {
+        [string](Get-WinSystemLocale -ErrorAction Stop).Name
+    }
+
+    [pscustomobject]@{
+        EditionId        = [string]$currentVersion.EditionID
+        InstallationType = [string]$currentVersion.InstallationType
+        Architecture     = $architecture
+        Build            = [int]$currentVersion.CurrentBuild
+        Revision         = [int]$currentVersion.UBR
+        Language         = $baseLanguage
+    }
+}
+
+function Get-RememberedRepairIsoPath {
+    if (-not (Test-Path -LiteralPath $script:RepairSourceStatePath -PathType Leaf)) {
+        return ''
+    }
+
+    try {
+        $state = Get-Content -LiteralPath $script:RepairSourceStatePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        if ($state.PSObject.Properties['iso_path']) {
+            return [string]$state.iso_path
+        }
+    }
+    catch {
+    }
+
+    return ''
+}
+
+function Save-RememberedRepairIsoPath {
+    param([Parameter(Mandatory)][string]$IsoPath)
+
+    $stateDirectory = Split-Path -Parent $script:RepairSourceStatePath
+    if (-not (Test-Path -LiteralPath $stateDirectory -PathType Container)) {
+        New-Item -ItemType Directory -Path $stateDirectory -Force -ErrorAction Stop | Out-Null
+    }
+
+    [ordered]@{
+        schema_version = 1
+        iso_path       = $IsoPath
+        verified_at    = (Get-Date).ToString('o')
+    } | ConvertTo-Json | Set-Content -LiteralPath $script:RepairSourceStatePath -Encoding utf8 -ErrorAction Stop
+}
+
+function Get-PreferredRepairDriveLetter {
+    $usedLetters = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $fileSystemDrives = @(Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue)
+    foreach ($fileSystemDrive in $fileSystemDrives) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$fileSystemDrive.Name)) {
+            [void]$usedLetters.Add([string]$fileSystemDrive.Name)
+        }
+    }
+
+    $logicalDisks = @(Get-CimInstance -ClassName Win32_LogicalDisk -ErrorAction SilentlyContinue)
+    foreach ($logicalDisk in $logicalDisks) {
+        $driveId = [string]$logicalDisk.DeviceID
+        if ($driveId -match '^([A-Z]):$') {
+            [void]$usedLetters.Add($Matches[1])
+        }
+    }
+
+    for ($letterCode = [int][char]'Z'; $letterCode -ge [int][char]'D'; $letterCode--) {
+        $candidate = [string][char]$letterCode
+        if (-not $usedLetters.Contains($candidate)) {
+            return $candidate
+        }
+    }
+
+    throw 'No free drive letter is available between Z: and D:.'
+}
+
+function Open-RepairIso {
+    param([Parameter(Mandatory)][string]$IsoPath)
+
+    $resolvedIsoPath = (Resolve-Path -LiteralPath $IsoPath -ErrorAction Stop).Path
+    if ([System.IO.Path]::GetExtension($resolvedIsoPath) -ine '.iso') {
+        throw 'The selected repair source is not an ISO file.'
+    }
+
+    $mountedByScript = $false
+    try {
+        $diskImage = Get-DiskImage -ImagePath $resolvedIsoPath -ErrorAction SilentlyContinue
+        if (-not $diskImage -or -not $diskImage.Attached) {
+            $preferredLetter = Get-PreferredRepairDriveLetter
+            Mount-DiskImage -ImagePath $resolvedIsoPath -StorageType ISO -Access ReadOnly -ErrorAction Stop | Out-Null
+            $mountedByScript = $true
+
+            $volume = $null
+            for ($attempt = 0; $attempt -lt 20 -and -not $volume; $attempt++) {
+                Start-Sleep -Milliseconds 250
+                $volume = Get-DiskImage -ImagePath $resolvedIsoPath | Get-Volume -ErrorAction SilentlyContinue
+            }
+            if (-not $volume) {
+                throw 'Windows mounted the ISO but its volume was not detected.'
+            }
+
+            $currentLetter = [string]$volume.DriveLetter
+            if ($currentLetter -ne $preferredLetter) {
+                $currentDrive = $currentLetter + ':'
+                $cimVolume = Get-CimInstance -ClassName Win32_Volume -ErrorAction Stop |
+                    Where-Object { $_.DriveLetter -eq $currentDrive } |
+                    Select-Object -First 1
+                if (-not $cimVolume) {
+                    throw "Could not resolve the mounted ISO volume at $currentDrive"
+                }
+                Set-CimInstance -InputObject $cimVolume -Property @{ DriveLetter = ($preferredLetter + ':') } -ErrorAction Stop | Out-Null
+            }
+        }
+
+        $volume = Get-DiskImage -ImagePath $resolvedIsoPath | Get-Volume -ErrorAction Stop
+        if (-not $volume -or [string]::IsNullOrWhiteSpace([string]$volume.DriveLetter)) {
+            throw 'The mounted ISO does not have an accessible drive letter.'
+        }
+
+        [pscustomobject]@{
+            IsoPath         = $resolvedIsoPath
+            DriveLetter     = [string]$volume.DriveLetter
+            RootPath        = ([string]$volume.DriveLetter + ':\')
+            MountedByScript = $mountedByScript
+        }
+    }
+    catch {
+        if ($mountedByScript) {
+            Dismount-DiskImage -ImagePath $resolvedIsoPath -ErrorAction SilentlyContinue | Out-Null
+        }
+        throw
+    }
+}
+
+function Close-RepairIso {
+    param([AllowNull()][psobject]$Mount)
+
+    if ($null -eq $Mount -or -not $Mount.MountedByScript) {
+        return
+    }
+
+    Dismount-DiskImage -ImagePath $Mount.IsoPath -ErrorAction SilentlyContinue | Out-Null
+}
+
+function Get-RepairSourceValidation {
+    param([Parameter(Mandatory)][psobject]$Mount)
+
+    $wimPath = Join-Path $Mount.RootPath 'sources\install.wim'
+    $esdPath = Join-Path $Mount.RootPath 'sources\install.esd'
+    if (Test-Path -LiteralPath $wimPath -PathType Leaf) {
+        $imagePath = $wimPath
+        $sourceType = 'wim'
+    }
+    elseif (Test-Path -LiteralPath $esdPath -PathType Leaf) {
+        $imagePath = $esdPath
+        $sourceType = 'esd'
+    }
+    else {
+        throw 'The ISO has neither sources\install.wim nor sources\install.esd.'
+    }
+
+    $live = Get-LiveRepairTarget
+    $imageSummaries = @(Get-WindowsImage -ImagePath $imagePath -ErrorAction Stop)
+    $rows = @(
+        foreach ($imageSummary in $imageSummaries) {
+            $image = Get-WindowsImage -ImagePath $imagePath -Index ([int]$imageSummary.ImageIndex) -ErrorAction Stop
+            $imageVersion = [version]$image.Version
+            $sourceArchitecture = Get-RepairArchitectureName -Architecture ([int]$image.Architecture)
+            $sourceLanguages = @($image.Languages | ForEach-Object { [string]$_ })
+            $mismatches = [System.Collections.Generic.List[string]]::new()
+
+            if ([string]$image.EditionId -ine $live.EditionId) {
+                $mismatches.Add("edition $($image.EditionId) != $($live.EditionId)")
+            }
+            if ([string]$image.InstallationType -ine $live.InstallationType) {
+                $mismatches.Add("installation $($image.InstallationType) != $($live.InstallationType)")
+            }
+            if ($sourceArchitecture -ine $live.Architecture) {
+                $mismatches.Add("architecture $sourceArchitecture != $($live.Architecture)")
+            }
+            if ($imageVersion.Build -ne $live.Build -or $imageVersion.Revision -ne $live.Revision) {
+                $mismatches.Add("build $($imageVersion.Build).$($imageVersion.Revision) != $($live.Build).$($live.Revision)")
+            }
+            if ($sourceLanguages -inotcontains $live.Language) {
+                $mismatches.Add("language $($sourceLanguages -join ',') does not include $($live.Language)")
+            }
+
+            [pscustomobject]@{
+                Index            = [int]$image.ImageIndex
+                Name             = [string]$image.ImageName
+                EditionId        = [string]$image.EditionId
+                InstallationType = [string]$image.InstallationType
+                Architecture     = $sourceArchitecture
+                Build            = $imageVersion.Build
+                Revision         = $imageVersion.Revision
+                Languages        = $sourceLanguages
+                IsMatch          = ($mismatches.Count -eq 0)
+                MismatchText     = ($mismatches -join '; ')
+            }
+        }
+    )
+    $matchingRows = @($rows | Where-Object { $_.IsMatch })
+
+    [pscustomobject]@{
+        IsMatch       = ($matchingRows.Count -eq 1)
+        Live          = $live
+        Images        = $rows
+        MatchingImage = if ($matchingRows.Count -eq 1) { $matchingRows[0] } else { $null }
+        ImagePath     = $imagePath
+        SourceType    = $sourceType
+    }
+}
+
+function Show-RepairSourceValidation {
+    param(
+        [Parameter(Mandatory)][psobject]$Mount,
+        [Parameter(Mandatory)][psobject]$Validation
+    )
+
+    $live = $Validation.Live
+    Write-Host ''
+    Write-Host '=== Repair source verification ===' -ForegroundColor Cyan
+    Write-Host "  ISO:  $($Mount.IsoPath)" -ForegroundColor Gray
+    Write-Host "  Mount: $($Mount.DriveLetter):" -ForegroundColor Gray
+    Write-Host ("  Live:  {0} / {1} / {2} / {3}.{4} / {5}" -f $live.EditionId, $live.InstallationType, $live.Architecture, $live.Build, $live.Revision, $live.Language) -ForegroundColor White
+
+    foreach ($image in $Validation.Images) {
+        $sourceText = "index $($image.Index): $($image.EditionId) / $($image.InstallationType) / $($image.Architecture) / $($image.Build).$($image.Revision) / $($image.Languages -join ',')"
+        if ($image.IsMatch) {
+            Write-Host "  ISO:   $sourceText" -ForegroundColor Green
+            Write-Host '  +++   VERIFIED: ISO exactly matches the live Windows installation.' -ForegroundColor Green
+        }
+        else {
+            Write-Host "  ISO:   $sourceText" -ForegroundColor Yellow
+            Write-Host "         Mismatch: $($image.MismatchText)" -ForegroundColor Yellow
+        }
+    }
+
+    if (-not $Validation.IsMatch) {
+        Write-Host '  [BLOCKED] No single exact repair image match was found.' -ForegroundColor Red
+    }
+}
+
+function Resolve-RepairIsoCandidate {
+    param([AllowEmptyString()][string]$RequestedPath)
+
+    if (-not [string]::IsNullOrWhiteSpace($RequestedPath)) {
+        return $RequestedPath.Trim().Trim('"')
+    }
+
+    $rememberedPath = Get-RememberedRepairIsoPath
+    if (-not [string]::IsNullOrWhiteSpace($rememberedPath)) {
+        return $rememberedPath
+    }
+
+    $attachedImages = @(Get-DiskImage -ErrorAction SilentlyContinue | Where-Object { $_.Attached -and $_.ImagePath -like '*.iso' })
+    if ($attachedImages.Count -eq 1) {
+        return [string]$attachedImages[0].ImagePath
+    }
+
+    return ''
+}
+
+function Test-AndRememberRepairIso {
+    param([Parameter(Mandatory)][string]$IsoPath)
+
+    $mount = Open-RepairIso -IsoPath $IsoPath
+    try {
+        $validation = Get-RepairSourceValidation -Mount $mount
+        Show-RepairSourceValidation -Mount $mount -Validation $validation
+        if ($validation.IsMatch) {
+            Save-RememberedRepairIsoPath -IsoPath $mount.IsoPath
+        }
+
+        [pscustomobject]@{
+            Mount      = $mount
+            Validation = $validation
+        }
+    }
+    catch {
+        Close-RepairIso -Mount $mount
+        throw
+    }
+}
+
+function Invoke-RepairSourceStatus {
+    param([AllowEmptyString()][string]$RequestedPath)
+
+    $candidatePath = Resolve-RepairIsoCandidate -RequestedPath $RequestedPath
+    if ([string]::IsNullOrWhiteSpace($candidatePath) -or -not (Test-Path -LiteralPath $candidatePath -PathType Leaf)) {
+        Write-Host '  [BLOCKED] No usable ISO path was supplied or remembered.' -ForegroundColor Red
+        return 30
+    }
+
+    $context = $null
+    try {
+        $context = Test-AndRememberRepairIso -IsoPath $candidatePath
+        if ($context.Validation.IsMatch) {
+            return 0
+        }
+        return 31
+    }
+    catch {
+        Write-Host "  [BLOCKED] ISO verification failed: $($_.Exception.Message)" -ForegroundColor Red
+        return 32
+    }
+    finally {
+        if ($context) {
+            Close-RepairIso -Mount $context.Mount
+        }
+    }
+}
+
+function Invoke-RepairRestoreHealth {
+    param([AllowEmptyString()][string]$RequestedPath)
+
+    $candidatePath = Resolve-RepairIsoCandidate -RequestedPath $RequestedPath
+    $context = $null
+
+    try {
+        if (-not [string]::IsNullOrWhiteSpace($candidatePath) -and (Test-Path -LiteralPath $candidatePath -PathType Leaf)) {
+            try {
+                $context = Test-AndRememberRepairIso -IsoPath $candidatePath
+            }
+            catch {
+                Write-Host "  ISO verification failed: $($_.Exception.Message)" -ForegroundColor Red
+            }
+        }
+
+        while ($true) {
+            Write-Host ''
+            Write-Host '=== RestoreHealth repair fallback ===' -ForegroundColor Cyan
+            if ($context -and $context.Validation.IsMatch) {
+                Write-Host '  Enter = repair from the verified ISO (recommended)' -ForegroundColor Green
+            }
+            else {
+                Write-Host '  I     = enter a matching Windows ISO path' -ForegroundColor White
+            }
+            Write-Host '  W     = explicitly allow Windows Update as the repair source' -ForegroundColor Yellow
+            Write-Host '          This can download files and may take a long time.' -ForegroundColor DarkGray
+            Write-Host '  Esc   = stop Full Cleanup safely' -ForegroundColor Red
+
+            $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+            if ($key.VirtualKeyCode -eq 27) {
+                Write-Host '  Cancelled. Windows Update was not contacted.' -ForegroundColor DarkGray
+                return 2
+            }
+
+            if ($key.VirtualKeyCode -eq 13 -and $context -and $context.Validation.IsMatch) {
+                $matchingImage = $context.Validation.MatchingImage
+                $sourceArgument = "/Source:$($context.Validation.SourceType):$($context.Validation.ImagePath):$($matchingImage.Index)"
+                Write-Host ''
+                Write-Host '=== DISM RestoreHealth (verified ISO source) ===' -ForegroundColor Cyan
+                & dism.exe /Online /Cleanup-Image /RestoreHealth $sourceArgument /LimitAccess
+                $repairExitCode = $LASTEXITCODE
+                if ($repairExitCode -eq 0) {
+                    Write-Host ''
+                    Write-Host '  +++   REPAIR COMPLETED: Restart Windows normally before running Full Cleanup again.' -ForegroundColor Green
+                }
+                else {
+                    Write-Host "  [X] ISO repair failed with exit code $repairExitCode." -ForegroundColor Red
+                }
+                return $repairExitCode
+            }
+
+            $character = ([string]$key.Character).ToUpperInvariant()
+            if ($character -eq 'I') {
+                if ($context) {
+                    Close-RepairIso -Mount $context.Mount
+                    $context = $null
+                }
+                $enteredPath = Read-Host '  ISO path (blank = cancel)'
+                if ([string]::IsNullOrWhiteSpace($enteredPath)) {
+                    continue
+                }
+                try {
+                    $context = Test-AndRememberRepairIso -IsoPath $enteredPath.Trim().Trim('"')
+                }
+                catch {
+                    Write-Host "  ISO verification failed: $($_.Exception.Message)" -ForegroundColor Red
+                }
+                continue
+            }
+
+            if ($character -eq 'W') {
+                if ($context) {
+                    Close-RepairIso -Mount $context.Mount
+                    $context = $null
+                }
+                Write-Host ''
+                Write-Host '=== DISM RestoreHealth (Windows Update allowed by user) ===' -ForegroundColor Cyan
+                & dism.exe /Online /Cleanup-Image /RestoreHealth
+                $repairExitCode = $LASTEXITCODE
+                if ($repairExitCode -eq 0) {
+                    Write-Host ''
+                    Write-Host '  +++   REPAIR COMPLETED: Restart Windows normally before running Full Cleanup again.' -ForegroundColor Green
+                }
+                else {
+                    Write-Host "  [X] Online repair failed with exit code $repairExitCode." -ForegroundColor Red
+                }
+                return $repairExitCode
+            }
+        }
+    }
+    finally {
+        if ($context) {
+            Close-RepairIso -Mount $context.Mount
+        }
+    }
+}
 
 # ─────────────────────────────────────────────
 # 🔵 HELPER: Read single key press (for menu)
@@ -3125,6 +3571,14 @@ switch ($Action) {
     'DismFailureSummaryFull' {
         Show-DismFailureSummary
         return
+    }
+    'RepairSourceStatus' {
+        $repairStatusExitCode = Invoke-RepairSourceStatus -RequestedPath $RepairIsoPath
+        exit $repairStatusExitCode
+    }
+    'RepairRestoreHealth' {
+        $repairExitCode = Invoke-RepairRestoreHealth -RequestedPath $RepairIsoPath
+        exit $repairExitCode
     }
     'LiveCleanup' {
         $liveCleanupResult = Remove-LiveSoftwareDistributionDownload

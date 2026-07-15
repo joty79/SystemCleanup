@@ -50,6 +50,7 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 │  ② SFC /scannow  (initial scan)                            │
 │  ③ DISM AnalyzeComponentStore                               │
 │  ④ DISM RestoreHealth /LimitAccess (local source only)     │
+│     └─ if unavailable: verified ISO or explicit WU choice  │
 │  ⑤ DISM StartComponentCleanup /ResetBase                   │
 │  ⑥ CleanInFlight.ps1  (WinSxS\Temp deep clean)             │
 │  ⑦ Reset TrustedInstaller + SFC /scannow  (verification)   │
@@ -61,7 +62,11 @@ The full cleanup orchestrates everything in the correct sequence with automatic 
 
 Each step reports exit codes with clear status indicators: `+++ OK`, `[~] FIXED`, or `[X] FAILED`. Before starting, Full Cleanup refuses to run while Windows has a pending restart, pending servicing packages, `pending.xml`, or an active `DISM` / `DismHost` / `TiWorker` process.
 
-The RestoreHealth stage uses `/LimitAccess`, so it can repair from the local component store but cannot silently start a Windows Update/FOD download. If the local repair source is insufficient, that step fails visibly and the entire flow stops immediately; `/ResetBase`, `CleanInFlight`, and final verification are not started after a required-step failure.
+The first RestoreHealth attempt uses `/LimitAccess`, so it can repair from the local component store but cannot silently start a Windows Update/FOD download. If that source is insufficient, the tool offers three explicit choices: `Enter` uses a verified matching ISO, `W` allows Windows Update for this repair attempt, and `ESC` stops safely without contacting Windows Update.
+
+An ISO is never trusted from its filename. The tool reads `install.wim` or `install.esd` and requires one exact match for edition, installation type, architecture, build/revision, and base language. It mounts read-only at the first free drive letter from `Z:` downward, never replaces an occupied letter, remembers a verified ISO path in the preserved `state\repair-source.json`, and dismounts only media that it mounted itself.
+
+After either ISO or Windows Update fallback repair succeeds, Full Cleanup stops before `/ResetBase`, `CleanInFlight`, and final SFC. Restart Windows normally and run Full Cleanup again; repair and irreversible cleanup are intentionally never chained in the same recovery run.
 
 The main `Full Cleanup` flow uses `dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase`, so superseded component versions are reclaimed immediately instead of waiting for the plain 30-day cleanup window. After any option completes, the tool **returns to the main menu** — only `ESC` exits the CMD launcher.
 
@@ -71,7 +76,7 @@ The action-oriented main-menu entries now open a confirmation panel first, so en
 
 When a `DISM` step fails, the launcher also prints the native exit code, points directly to `C:\Windows\Logs\DISM\dism.log` and `C:\Windows\Logs\CBS\CBS.log`, and shows a short ranked summary of the most relevant recent `DISM` / `CBS` clues in a compact format that remains readable in narrow Windows Terminal panes.
 
-Full Cleanup never force-terminates Windows servicing automatically. A blocked preflight or failed step is reported as `FULL CLEANUP STOPPED SAFELY`, and no later cleanup stage is launched.
+Full Cleanup never force-terminates Windows servicing automatically. A blocked preflight or failed/cancelled repair is reported as `FULL CLEANUP STOPPED SAFELY`, and no later cleanup stage is launched.
 
 Main-menu option `[4]` shows the live Delivery Optimization state directly in the gray description line and lets you clear the Delivery Optimization cache while safely forcing `DownloadMode = 0 (CdnOnly)` so peer-to-peer sharing stays off.
 

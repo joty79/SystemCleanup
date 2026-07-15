@@ -11,7 +11,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $script:LogDir = ''
 $script:LogFile = ''
 $script:AppName = 'SystemCleanup'
-$script:AppVersion = '1.0.4'
+$script:AppVersion = '1.0.5'
 $script:AppGitHubRepo = 'joty79/SystemCleanup'
 $script:AppMetadataPath = Join-Path $PSScriptRoot 'app-metadata.json'
 $script:StatePath = Join-Path $PSScriptRoot 'state'
@@ -1746,12 +1746,27 @@ function Start-FullCleanupInWtPane {
     return $true
 }
 
+function Invoke-RestoreHealthRepairFallback {
+    $manageUpdatesPath = Join-Path $PSScriptRoot 'ManageUpdates.ps1'
+    $pwshPath = Join-Path $PSHOME 'pwsh.exe'
+    if (-not (Test-Path -LiteralPath $pwshPath -PathType Leaf)) {
+        $pwshPath = 'pwsh.exe'
+    }
+
+    Write-Host ''
+    Write-UiTextLine -Text 'The local component store could not complete RestoreHealth.' -Prefix '  ' -Color $script:C.Warn
+    Write-UiTextLine -Text 'A verified ISO repair source can be used, or Windows Update can be allowed explicitly.' -Prefix '  ' -Color $script:C.White
+    & $pwshPath -NoProfile -ExecutionPolicy Bypass -File $manageUpdatesPath -Action RepairRestoreHealth -SilentCaller
+    return $LASTEXITCODE
+}
+
 function Invoke-FullCleanup {
     Show-SubmenuHeader -Title 'Full Cleanup' -Subtitle 'SFC + DISM + InFlight'
     Write-UiTextLine -Text 'This will:' -Prefix '  ' -Color $script:C.Warn
     Write-UiTextLine -Text '- Run the full SFC + DISM + WinSxS Temp sequence' -Prefix '      ' -Color $script:C.Dim
     Write-UiTextLine -Text '- Use the aggressive DISM /StartComponentCleanup /ResetBase path' -Prefix '      ' -Color $script:C.Dim
     Write-UiTextLine -Text '- Keep RestoreHealth local-only so it cannot start a hidden Windows Update download' -Prefix '      ' -Color $script:C.Dim
+    Write-UiTextLine -Text '- Offer a strictly matched ISO repair or explicit Windows Update fallback if local repair fails' -Prefix '      ' -Color $script:C.Dim
     Write-UiTextLine -Text '- Stop the flow immediately when any required step fails' -Prefix '      ' -Color $script:C.Dim
     Write-UiTextLine -Text '- Open a dedicated WT split pane when available' -Prefix '      ' -Color $script:C.Dim
     Write-UiTextLine -Text '- Take a while depending on image health and component-store size' -Prefix '      ' -Color $script:C.Dim
@@ -1829,7 +1844,21 @@ function Invoke-FullCleanup {
 
     $stepExitCode = Invoke-CmdNativeStep -Title 'DISM RestoreHealth (local source only)' -CommandLine 'dism.exe /Online /Cleanup-Image /RestoreHealth /LimitAccess'
     if ($stepExitCode -ne 0) {
-        Write-UiTextLine -Text 'Full Cleanup stopped safely. Windows Update was not contacted.' -Prefix '  ' -Color $script:C.Fail
+        $repairExitCode = Invoke-RestoreHealthRepairFallback
+        if ($repairExitCode -eq 0) {
+            Write-Host ''
+            Write-Host '==========================================' -ForegroundColor Green
+            Write-Host '   REPAIR COMPLETED - RESTART REQUIRED' -ForegroundColor White
+            Write-Host '==========================================' -ForegroundColor Green
+            Write-UiTextLine -Text 'Full Cleanup stopped before /ResetBase and later cleanup stages.' -Prefix '  ' -Color $script:C.Warn
+            Write-UiTextLine -Text 'Restart Windows normally, then run Full Cleanup again.' -Prefix '  ' -Color $script:C.Dim
+            Write-Log -Level 'INFO' -Message 'REPAIRED: RestoreHealth fallback completed - restart required'
+            Wait-ReturnToMenu
+            return
+        }
+
+        Write-UiTextLine -Text 'Full Cleanup stopped safely. No later cleanup steps were started.' -Prefix '  ' -Color $script:C.Fail
+        Write-Log -Level 'WARN' -Message ("RestoreHealth fallback returned code {0}" -f $repairExitCode)
         Wait-ReturnToMenu
         return
     }
